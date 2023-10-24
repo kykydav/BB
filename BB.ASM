@@ -78,6 +78,61 @@ PROC moveBall
 		ret                   
 
 ENDP moveBall
+
+
+PROC movePaddle								;Compute movement of the paddles
+			
+;       Paddle movement
+	checkPaddleMovement:
+		mov ah, 01h
+		int 16h
+		jz exitPaddleMovement 				;jz -> Jump If Zero | so if no key jump to exit
+		
+		;check which key is being pressed (AL = ASCII character)
+		mov ah, 00h
+		int 16h
+		
+		;if it is '<--'  move left and '-->' move right
+		cmp al, 4bh 						;'<--'
+		je movePaddleLeft
+		cmp al, 4dh							;'-->'
+		je movePaddleRight 
+		
+		movePaddleLeft:
+			mov ax, paddleVelocity
+			sub paddleX, ax
+			
+			mov ax, 00h			
+			cmp paddleX,ax
+			jl paddleRigthOfBorder
+			jmp exitPaddleMovement
+			
+			paddleRigthOfBorder:
+				mov paddleX,ax
+				jmp exitPaddleMovement
+		
+		movePaddleRight:
+			mov ax,paddleVelocity
+			add paddleX,ax
+			
+			mov ax, windowWidth				; has to change depending on how we draw paddle and testing
+			sub ax,paddleWidth
+			cmp paddleX,ax
+			jg paddleLeftOfBorder
+			jmp exitPaddleMovement
+			
+			paddleLeftOfBorder:
+				mov paddleX,ax
+				jmp exitPaddleMovement
+	
+	exitPaddleMovement:
+	
+		ret
+	
+MOVE_PADDLES ENDP
+
+
+
 PROC setVideoMode
 	ARG @@mode:word
 	USES eax
@@ -96,13 +151,15 @@ DATASEG
 
 
 	; Ball variables
-	ballX
-	ballY
-	ballVelocityX 
-	ballVelocityY
+	ballX dw 00h
+	ballY dw 00h
+	ballVelocityX dw 05h               		;X (horizontal) velocity of the ball
+	ballVelocityY dw 02h           			;Y (vertical) velocity of the ball
 	
-
-
+	; paddle constants	
+	paddleWidth dw 19h                  	;default paddle width (25px)
+	paddleHeigth dw 07h                		;default paddle height (7px)
+	paddleVelocity dw 0Fh               	;default paddle velocity (15 px/100th sec  ??? excesive speed)	
 
 	timeAux db 0                        	; Variable used when checking if the time has changed
 	windowWidth dw 140h						; WindowWidth(320px in hex) 
