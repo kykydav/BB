@@ -23,26 +23,26 @@ SCRHEIGHT EQU 200	; screen height
 CODESEG
 	
 start:
-     sti            ; set The Interrupt Flag => enable interrupts
-     cld            ; clear The Direction Flag
+     sti            						; set The Interrupt Flag => enable interrupts
+     cld            						; clear The Direction Flag
 
 
 PROC main
-	CHECK_TIME:                      ;time checking loop
+	checkTime:                      		;time checking loop
 		
-		MOV AH,2Ch 					 ;get the system time
-		INT 21h    					 ;CH = hour CL = minute DH = second DL = 1/100 seconds
+		mov ah,2Ch 							;get the system time
+		int 21h    							;ch = hour cl = minute dh = second dl = 1/100 seconds
 		
-		CMP DL,TIME_AUX  			 ;is the current time equal to the previous one(TIME_AUX)?
-		JE CHECK_TIME    		     ;if it is the same, check again
+		cmp dl,timeAux  					;is the current time equal to the previous one(timeAux)?
+		je checkTime    		    		;if it is the same, check again
 		
 ;           If it reaches this point, it's because the time has passed
 
-		MOV TIME_AUX,DL              ;update time
+		mov timeAux,dl              		;update time
 		
 		;CALL all update functions
 		
-	RET		
+	ret		
 ENDP main
 
 
@@ -54,7 +54,7 @@ PROC setVideoMode
 	ARG @@mode:word
 	USES eax
 	
-	mov ax, [@@mode]	; Executes configuration
+	mov ax, [@@mode]						; Executes configuration
 	int 10h
 
 	ret
@@ -66,7 +66,7 @@ ENDP setVideoMode
 ; -------------------------------------------------------------------
 DATASEG
 
-	TIME_AUX DB 0                        ;variable used when checking if the time has changed
+	timeAux db 0                        	;variable used when checking if the time has changed
 
 
 ; -------------------------------------------------------------------
