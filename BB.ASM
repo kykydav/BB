@@ -45,11 +45,39 @@ PROC main
 	ret		
 ENDP main
 
+PROC moveBall
+	mov ax, ballVelocityX
+	add ballX, ax							; Move in x Direction
+
+	; Those collision teste need to be adjusted to the size of the ball
+	cmp ballX, 00h					
+	jle negVelocityX							; If the ball hits left border, negate x velocity
+	
+	mov ax, windowWidth
+	cmp ballX, ax
+	jge negVelocityX							; If the ball hits right border, negate x velocity
 
 
+	mov ax, ballVelocityY
+	add ballY, ax							; Move in y direction
+	
+	cmp ballY, 00h
+	jle negVelocityY							; If the ball hits upper border, negate x velocity
 
+	;mov ax, windowHeigth
+	;cmp ballY, ax							
+	;jge gameOver							; If the ball hits the lower border --> jump to gameOver
+	
+	
+	; is this needed as we have only one line
+	negVelocityY:
+		neg ballVelocityY   				; Reverse the vertical velocity of the ball 
+		ret
+	negVelocityX:
+		neg ballVelocityX              		; Reverses the horizontal velocity of the ball
+		ret                   
 
-
+ENDP moveBall
 PROC setVideoMode
 	ARG @@mode:word
 	USES eax
@@ -66,8 +94,19 @@ ENDP setVideoMode
 ; -------------------------------------------------------------------
 DATASEG
 
-	timeAux db 0                        	;variable used when checking if the time has changed
 
+	; Ball variables
+	ballX
+	ballY
+	ballVelocityX 
+	ballVelocityY
+	
+
+
+
+	timeAux db 0                        	; Variable used when checking if the time has changed
+	windowWidth dw 140h						; WindowWidth(320px in hex) 
+	windowHeigth dw 0c8h					; WindowHeigth (200px in hex)
 
 ; -------------------------------------------------------------------
 ; STACK
