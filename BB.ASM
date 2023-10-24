@@ -18,6 +18,17 @@ ASSUME cs:_TEXT,ds:FLAT,es:FLAT,fs:FLAT,gs:FLAT
 ; -------------------------------------------------------------------
 CODESEG
 	
+PROC setVideoMode
+	ARG @@mode:word
+	USES eax
+	
+	mov ax, [@@mode]
+	int 10h
+
+	ret
+
+ENDP setVideoMode
+	
 start:
      sti            ; set The Interrupt Flag => enable interrupts
      cld            ; clear The Direction Flag
