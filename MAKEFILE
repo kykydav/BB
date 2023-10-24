@@ -3,8 +3,8 @@
 # =============================================================================
 
 # Settings - Edit the names of the object and executable files.
-objects1 = BrickBreaker.obj
-dest = BrickBreaker.exe
+objects1 = BB.obj
+dest = BB.exe
 
 # =============================================================================
 # Do NOT edit this section, unless you know what you are doing.
