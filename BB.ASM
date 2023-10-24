@@ -26,6 +26,30 @@ start:
      sti            ; set The Interrupt Flag => enable interrupts
      cld            ; clear The Direction Flag
 
+
+PROC main
+	CHECK_TIME:                      ;time checking loop
+		
+		MOV AH,2Ch 					 ;get the system time
+		INT 21h    					 ;CH = hour CL = minute DH = second DL = 1/100 seconds
+		
+		CMP DL,TIME_AUX  			 ;is the current time equal to the previous one(TIME_AUX)?
+		JE CHECK_TIME    		     ;if it is the same, check again
+		
+;           If it reaches this point, it's because the time has passed
+
+		MOV TIME_AUX,DL              ;update time
+		
+		;CALL all update functions
+		
+	RET		
+ENDP main
+
+
+
+
+
+
 PROC setVideoMode
 	ARG @@mode:word
 	USES eax
@@ -36,20 +60,6 @@ PROC setVideoMode
 	ret
 
 ENDP setVideoMode
-
-	; next lines of code are superfluous as black is default background
-	mov ah, 0bh ; set configuration 
-	mov bh, 00h ; to the background color
-	mov bl, 00h ; choose black as background: https://en.wikipedia.org/wiki/BIOS_color_attributes 
-	int 10h		; execute configuration
-
-	; following lines of code draw a pixel at 10,
-	mov ah, 0ch ; set the configuration to writing a pixel
-	mov al, 0Fh ; choose white as color:
-	mov bh, 00h ; set the page number
-	mov cx, 0ah ; set the column (x)
-	mov dx, 0Ah ; set the line (y) 
-	int 10h 	; execute the config
 	
 ; -------------------------------------------------------------------
 ; DATA
