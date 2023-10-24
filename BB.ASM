@@ -3,9 +3,9 @@
 ; 32-bit x86 assembly language
 ; TASM
 ;
-; author:	David Blinder, Stijn Bettens
-; date:		23/10/2018
-; program:	Video mode 13h
+; author:	Artyom Petrosyan, Kyan David
+; date:		24/10/2023
+; program:	Brick Breaker game
 ; -------------------------------------------------------------------
 
 IDEAL
