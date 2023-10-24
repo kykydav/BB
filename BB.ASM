@@ -22,6 +22,27 @@ start:
      sti            ; set The Interrupt Flag => enable interrupts
      cld            ; clear The Direction Flag
 	
+
+
+	PROC main
+		
+	PROC setVideoMode
+		ARG @@mode:word
+		USES eax
+	
+		mov ax, [@@mode]
+		int 10h
+
+		ret
+
+	ENDP setVideoMode
+	
+	
+
+
+
+
+
 	; -------------------------------------------------------------------
 	; The 10h interupt is described thoroughly https://en.wikipedia.org/wiki/INT_10H
 	; -------------------------------------------------------------------
