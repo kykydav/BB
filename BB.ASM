@@ -3,9 +3,9 @@
 ; 32-bit x86 assembly language
 ; TASM
 ;
-; author:	Stijn Bettens, David Blinder
-; date:		25/09/2017
-; program:	Hello World!
+; author:	David Blinder, Stijn Bettens
+; date:		23/10/2018
+; program:	Video mode 13h
 ; -------------------------------------------------------------------
 
 IDEAL
@@ -21,8 +21,6 @@ CODESEG
 start:
      sti            ; set The Interrupt Flag => enable interrupts
      cld            ; clear The Direction Flag
-	
-	
 	
 	; -------------------------------------------------------------------
 	; The 10h interupt is described thoroughly https://en.wikipedia.org/wiki/INT_10H
@@ -45,19 +43,14 @@ start:
 	mov dx, 0Ah ; set the line (y) 
 	int 10h 	; execute the config
 	
-	
-	
-	
-
 ; -------------------------------------------------------------------
 ; DATA
 ; -------------------------------------------------------------------
 DATASEG
-	msg db "HEllo World!", 10, '$' ;10 is enter ; $ terminate messege
-	msg2 db "I am Kyan", 10,'$'
+
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
 STACK 100h
 
-END start
+END main
