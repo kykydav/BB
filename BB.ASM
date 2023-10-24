@@ -22,6 +22,10 @@ SCRHEIGHT EQU 200	; screen height
 ; -------------------------------------------------------------------
 CODESEG
 	
+start:
+     sti            ; set The Interrupt Flag => enable interrupts
+     cld            ; clear The Direction Flag
+
 PROC setVideoMode
 	ARG @@mode:word
 	USES eax
@@ -32,6 +36,7 @@ PROC setVideoMode
 	ret
 
 ENDP setVideoMode
+<<<<<<< Updated upstream
 	
 
 	
@@ -39,28 +44,7 @@ start:
      sti            ; set The Interrupt Flag => enable interrupts
      cld            ; clear The Direction Flag
 	
-<<<<<<< HEAD
 =======
-
-
-	PROC main
-		
-	PROC setVideoMode
-		ARG @@mode:word
-		USES eax
-	
-		mov ax, [@@mode]
-		int 10h
-
-		ret
-
-	ENDP setVideoMode
-	
-	
-
-
-
-
 
 	; -------------------------------------------------------------------
 	; The 10h interupt is described thoroughly https://en.wikipedia.org/wiki/INT_10H
@@ -70,6 +54,7 @@ start:
 	int 10h		 ; execute the configuration
 	
 >>>>>>> Kyan
+>>>>>>> Stashed changes
 	; next lines of code are superfluous as black is default background
 	mov ah, 0bh ; set configuration 
 	mov bh, 00h ; to the background color
