@@ -129,7 +129,7 @@ PROC movePaddle								;Compute movement of the paddles
 	
 		ret
 	
-MOVE_PADDLES ENDP
+movePaddle ENDP
 
 
 
