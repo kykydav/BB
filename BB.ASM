@@ -33,12 +33,12 @@ PROC main
 		mov ah,2Ch 							;get the system time
 		int 21h    							;ch = hour cl = minute dh = second dl = 1/100 seconds
 		
-		cmp dl,timeAux  					;is the current time equal to the previous one(timeAux)?
+		cmp dl, [timeAux]  					;is the current time equal to the previous one(timeAux)?
 		je checkTime    		    		;if it is the same, check again
 		
 ;           If it reaches this point, it's because the time has passed
 
-		mov timeAux,dl              		;update time
+		mov [timeAux], dl              		;update time
 		
 		;CALL all update functions
 		
@@ -46,22 +46,22 @@ PROC main
 ENDP main
 
 PROC moveBall
-	mov ax, ballVelocityX
-	add ballX, ax							; Move in x Direction
+	mov ax, [ballVelocityX]
+	add [ballX], ax							; Move in x Direction
 
 	; Those collision teste need to be adjusted to the size of the ball
-	cmp ballX, 00h					
+	cmp [ballX], 00h					
 	jle negVelocityX							; If the ball hits left border, negate x velocity
 	
-	mov ax, windowWidth
-	cmp ballX, ax
+	mov ax, [windowWidth]
+	cmp [ballX], ax
 	jge negVelocityX							; If the ball hits right border, negate x velocity
 
 
-	mov ax, ballVelocityY
-	add ballY, ax							; Move in y direction
+	mov ax, [ballVelocityY]
+	add [ballY], ax							; Move in y direction
 	
-	cmp ballY, 00h
+	cmp [ballY], 00h
 	jle negVelocityY							; If the ball hits upper border, negate x velocity
 
 	;mov ax, windowHeigth
@@ -71,10 +71,10 @@ PROC moveBall
 	
 	; is this needed as we have only one line
 	negVelocityY:
-		neg ballVelocityY   				; Reverse the vertical velocity of the ball 
+		neg [ballVelocityY]   				; Reverse the vertical velocity of the ball 
 		ret
 	negVelocityX:
-		neg ballVelocityX              		; Reverses the horizontal velocity of the ball
+		neg [ballVelocityX]              		; Reverses the horizontal velocity of the ball
 		ret                   
 
 ENDP moveBall
@@ -99,37 +99,37 @@ PROC movePaddle								;Compute movement of the paddles
 		je movePaddleRight 
 		
 		movePaddleLeft:
-			mov ax, paddleVelocity
-			sub paddleX, ax
+			mov ax, [paddleVelocity]
+			sub [paddleX], ax
 			
 			mov ax, 00h			
-			cmp paddleX,ax
+			cmp [paddleX], ax
 			jl paddleRigthOfBorder
 			jmp exitPaddleMovement
 			
 			paddleRigthOfBorder:
-				mov paddleX,ax
+				mov [paddleX], ax
 				jmp exitPaddleMovement
 		
 		movePaddleRight:
-			mov ax,paddleVelocity
-			add paddleX,ax
+			mov ax, [paddleVelocity]
+			add [paddleX], ax
 			
-			mov ax, windowWidth				; has to change depending on how we draw paddle and testing
-			sub ax,paddleWidth
-			cmp paddleX,ax
+			mov ax, [windowWidth]				; has to change depending on how we draw paddle and testing
+			sub ax, [paddleWidth]
+			cmp [paddleX], ax
 			jg paddleLeftOfBorder
 			jmp exitPaddleMovement
 			
 			paddleLeftOfBorder:
-				mov paddleX,ax
+				mov [paddleX], ax
 				jmp exitPaddleMovement
 	
 	exitPaddleMovement:
 	
 		ret
 	
-movePaddle ENDP
+ENDP movePaddle 
 
 
 
@@ -153,10 +153,18 @@ DATASEG
 	; Ball variables
 	ballX dw 00h
 	ballY dw 00h
+	
+	; Ball constants
 	ballVelocityX dw 05h               		;X (horizontal) velocity of the ball
 	ballVelocityY dw 02h           			;Y (vertical) velocity of the ball
 	
+	
+	
+	;Paddle variables
+	paddleX dw 00h
+	
 	; paddle constants	
+	paddleY dw 00h	
 	paddleWidth dw 19h                  	;default paddle width (25px)
 	paddleHeigth dw 07h                		;default paddle height (7px)
 	paddleVelocity dw 0Fh               	;default paddle velocity (15 px/100th sec  ??? excesive speed)	
