@@ -1,0 +1,175 @@
+; -------------------------------------------------------------------
+; 80386
+; 32-bit x86 assembly language
+; TASM
+;
+; author:	David Blinder, Stijn Bettens
+; date:		23/10/2018
+; program:	Video mode 13h
+; -------------------------------------------------------------------
+
+IDEAL
+P386
+MODEL FLAT, C
+ASSUME cs:_TEXT,ds:FLAT,es:FLAT,fs:FLAT,gs:FLAT
+
+; compile-time constants (with macros)
+VMEMADR EQU 0A0000h	; video memory address
+SCRWIDTH EQU 320	; screen witdth
+SCRHEIGHT EQU 200	; screen height
+
+; -------------------------------------------------------------------
+CODESEG
+
+; Set the video mode
+PROC setVideoMode
+	ARG @@mode:word
+	USES eax
+	
+	mov ax, [@@mode]
+	int 10h
+
+	ret
+
+ENDP setVideoMode
+
+; ; Draw a rectangle (video mode 13h)
+PROC drawRectangle
+	ARG @@x0:word, @@y0:word, @@w:word, @@h:word, @@color:byte
+	USES edi, ecx, eax, edx
+	
+	push ax
+	
+	movzx eax, [@@y0]
+	mov edx, SCRWIDTH
+	mul edx
+	add ax, [@@x0]
+	
+	mov edi, VMEMADR
+	add edi, eax
+	
+	movzx edx, [@@w]
+	mov ecx, edx
+	mov al, [@@color]
+	rep stosb
+	sub edi, edx
+	
+	movzx ecx, [@@h]
+	verticalloop:
+		mov [edi], al
+		mov [edi + edx - 1], al
+		add edi, SCRWIDTH
+		loop verticalloop
+		
+	sub edi, SCRWIDTH
+	
+	mov ecx, edx
+	rep stosb
+	
+	pop ax
+	
+	ret
+	
+ENDP drawRectangle
+
+PROC printUnsignedInteger
+	ARG @@number:dword
+	USES eax, ebx, ecx, edx
+	
+	mov eax, [@@number]
+	xor ecx, ecx
+	
+	decloop:
+		xor edx, edx
+		mov ebx, 10
+		div ebx
+		
+		push edx
+		inc ecx
+		
+	test eax, eax
+	jnz decloop
+	
+	printloop:
+		pop edx
+		mov ah, 02h
+		add dl, '0'
+		int 21h
+		
+	dec ecx
+	test ecx, ecx
+	jnz printloop
+	
+	mov dl, 0
+	
+	ret
+	
+ENDP printUnsignedInteger
+
+; ; Wait for a specific keystroke.
+PROC waitForSpecificKeystroke
+	USES eax
+	press_check:
+		mov ah, 01h
+		int 16h
+		jz press_check
+		
+		mov ah, 00h
+		int 16h
+		
+		cmp al, 27		;27 is ASCII code for 'ESC'
+		jne press_check
+		
+	mov ax, 03h
+	int 10h
+	
+	ret
+	
+ENDP waitForSpecificKeystroke
+
+; Terminate the program.
+PROC terminateProcess
+	USES eax
+	call setVideoMode, 03h
+	mov	ax,04C00h
+	int 21h
+	ret
+ENDP terminateProcess
+
+PROC main
+	sti
+	cld
+	
+	push ds
+	pop	es
+	
+	call setVideoMode, 13h
+	
+	push 15
+	push 6
+	push 2
+	mov ax, [Ball_Y]
+	push ax
+	mov bx, [Ball_X]
+	push bx
+	
+    ; Access variables from DATASEG and pass them as arguments to drawRectangle
+	
+    call drawRectangle
+	
+	call waitForSpecificKeystroke, 001Bh ; keycode for ESC
+	
+	call terminateProcess
+ENDP main
+
+; -------------------------------------------------------------------
+DATASEG
+	Ball_X dw 160
+	Ball_Y dw 100
+	Ball_size dw 3
+; -------------------------------------------------------------------
+; STACK
+; -------------------------------------------------------------------
+STACK 100h
+
+END main
