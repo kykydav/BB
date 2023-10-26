@@ -142,6 +142,7 @@ PROC main
     ; Use the variables from DATASEG as arguments
     call drawBall, [Ball_X], [Ball_Y], [Ball_size]
 
+
     call waitForSpecificKeystroke, 001Bh ; keycode for ESC
 
     call terminateProcess
