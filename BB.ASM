@@ -34,7 +34,7 @@ PROC setVideoMode
 ENDP setVideoMode
 
 PROC drawRectangle
-	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@col: byte   ; col = 15 is white
+	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@col:byte   ; col = 15 is white
 	USES 	eax, ecx, edx, edi ; note: MUL uses edx!
 
 	; Compute the index of the rectangle's top left corner
@@ -50,7 +50,7 @@ PROC drawRectangle
 	; Plot the top horizontal edge.
 	mov edx, [@@w]	; store width in edx for later reuse
 	mov	ecx, edx
-	mov	al,[@@col]
+	mov	al, [@@col]
 	rep stosb
 	sub edi, edx		; reset edi to left-top corner
 
@@ -71,7 +71,7 @@ PROC drawRectangle
 ENDP drawRectangle
 
 PROC drawBall
-	ARG @@x:dword, @@y:dword, @@size:dword, @@col: word
+	ARG @@x:dword, @@y:dword, @@size:dword, @@col:word
 	USES eax, ebx, ecx, edx
 
 	mov eax, [@@x]
@@ -101,7 +101,7 @@ PROC drawBall
 ENDP drawBall
 
 PROC drawPaddle
-		ARG @@col: word
+		ARG @@col:word
 
 		call drawRectangle, [Paddle_X], [Paddle_Y], [Paddle_Width], [Paddle_Heigtht], [@@col]
 
@@ -190,32 +190,36 @@ PROC movePaddle								;Compute movement of the paddles
 		mov ah, 00h
 		int 16h
 
-		;if it is '<--'  move left and '-->' move right
-		cmp al, 4Bh 						;'<--'
+		
+		;if it is 's' or 'S'  move left and 'd' or 'D' move right
+		cmp al, 73h 		; 's'
 		je movePaddleLeft
-		cmp al, 4Dh							;'-->'
+		cmp al, 53h			; 'S'
+		je movePaddleLeft
+		
+		cmp al, 64h			; 'd'
 		je movePaddleRight
-		jmp exitPaddleMovement
+		cmp al, 44h			; 'D'
+		je movePaddleRight
+		
+		ret
+		
 		movePaddleLeft:
 			mov eax, [Paddle_V]
 			sub [Paddle_X], eax
 
-			mov eax, 00h
+			xor eax, eax
 			cmp [Paddle_X], eax
-			jl paddleRigthOfBorder
+			jl paddleRightOfBorder
 			jmp exitPaddleMovement
 
-			paddleRigthOfBorder:
+			paddleRightOfBorder:
 				mov [Paddle_X], eax
 				jmp exitPaddleMovement
 
 		movePaddleRight:
 			mov eax, [Paddle_V]
 			add [Paddle_X], eax
-			add [Paddle_X], eax
-			add [Paddle_X], eax
-			add [Paddle_X], eax
-
 
 			mov eax, [Window_Width]				; has to change depending on how we draw paddle and testing
 			sub eax, [Paddle_Width]
@@ -321,7 +325,7 @@ DATASEG
 	Paddle_Y dd 180
 	Paddle_Width dd 19h                  	;default paddle width (25px)
 	Paddle_Heigtht dd 07h              		;default paddle height (7px)
-	Paddle_V dd 0Fh               			;default paddle velocity (15 px/100th sec  ??? excesive speed)
+	Paddle_V dd 0Fh               			;default paddle velocity (10 px/100th sec  ??? excesive speed)
 
 	;Game Constatnt
 	Last_Time db 0                        	; Variable used when checking if the time has changed
