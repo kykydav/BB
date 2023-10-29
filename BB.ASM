@@ -164,8 +164,43 @@ PROC moveBall
 	cmp [Ball_Y], eax
 	jge gameOver							; If the ball hits the lower border --> jump to gameOver
 
-	ret										; Needed otherwise go trough the rest of the procedure
+; Collision with bricks and paddle is done with AABB
+		
+	
+	mov eax, [Ball_X]		;condition 1 for collision
+	add eax, [Ball_Size]	;maxx1 > minx2
+	cmp eax, [Paddle_X]		;Ball_X + Ball_Size > Paddle_X
+	jng brickCollision  	;if there's no collision exit collision with paddle
+	
+	mov eax, Paddle_X		;condition 2 for collision
+	add eax, Paddle_Width	;minx1 < maxx2
+	cmp Ball_X,eax			;Ball_X < Paddle_X + Paddle_Width
+	jnl brickCollision  	;if there's no collision exit collision with paddle
+	
+	mov eax,Ball_Y			;condition 3 for collision
+	add eax,Ball_Size		;maxy1 > miny2 
+	add eax,Ball_Size
+	add eax,Ball_Size
+	cmp eax,Paddle_Y		;Ball_Y + Ball_Size > Paddle_Y
+	jng brickCollision  	;if there's no collision exit collision with paddle
+	
+	mov eax, Paddle_Y		;condition 4 for collision
+	add eax, Paddle_Heigtht	;miny1 < maxy2
+	cmp Ball_Y, eax			;Ball_Y < Paddle_Y + Paddle_Heigtht
+	jnl brickCollision  	;if there's no collision exit collision with paddle
+	
+;       If it reaches this point, the ball is colliding with the right paddle
+	jmp negVelocityY
+	
+	brickCollision:
 
+
+
+
+
+
+
+	ret										; Needed otherwise go trough the rest of the procedure
 	; is this needed as we have only one line
 	negVelocityY:
 		neg [Ball_VY]   				; Reverse the vertical velocity of the ball
@@ -311,9 +346,8 @@ DATASEG
 	Ball_X dd 160
 	Ball_Y dd 100
 	; The speed is constant in magnitude but they are not constants as they vary in sign.	
-	Ball_VX dd 05h               			;X (horizontal) velocity of the ball
-	Ball_VY dd 02h           				;Y (vertical) velocity of the ball
-
+	Ball_VX dd 05h               			;X (horizontal) velocity of the ball (5px)
+	Ball_VY dd 02h           				;Y (vertical) velocity of the ball (2px)
 
 	; Ball constants
 	Ball_Size dd 3
@@ -336,6 +370,11 @@ DATASEG
 	; colors
 	Black dw 0
 	White dw 15
+	
+	;Bricks
+	;Bricks_X dd 5 ,
+	;Bricks_Y
+	
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
