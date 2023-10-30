@@ -201,19 +201,20 @@ PROC moveBall
 	cmp eax, [Paddle_Y]			;Ball_Y + 2 * Ball_Size >= Paddle_Y
 	jle negVelocityY    	; Jump if Ball's bottom edge < Paddle's top edge
 	
-	; Check for collision on the left side of the paddle
-    mov eax, [Ball_X]			
-	add eax, [Ball_Size]		
-	add eax, [Ball_Size]		;maxX1 >= minX2
-	cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
-    jge negVelocityX   		; Jump if Ball's right edge > Paddle's left edge
-
-    ; Check for collision on the right side of the paddle
-    mov eax, [Paddle_X]			
-	add eax, [Paddle_Width]		;minX1 <= maxX2
-	cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
-    jle negVelocityX   		; Jump if Ball's left edge < Paddle's right edge
-		
+	;--> those 2 are not needed as you do not hit from above you certainly hit from a side so just negate x speed 	
+	; Check for collision on the left side of the paddle 
+;    mov eax, [Ball_X]			
+;	add eax, [Ball_Size]		
+;	add eax, [Ball_Size]		;maxX1 >= minX2
+;	cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
+;   jge negVelocityX   		; Jump if Ball's right edge > Paddle's left edge
+;
+;    ; Check for collision on the right side of the paddle
+;   mov eax, [Paddle_X]			
+;	;add eax, [Paddle_Width]		;minX1 <= maxX2
+;	cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
+;   jle negVelocityX   		; Jump if Ball's left edge < Paddle's right edge
+	jmp negVelocityX		; not 100% sure its not worse but in theory should work 
 	brickCollision:
 
 
@@ -223,7 +224,7 @@ PROC moveBall
 
 
 	ret							; Needed otherwise go trough the rest of the procedure
-	; is this needed as we have only one line
+	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
 	negVelocityY:
 		neg [Ball_VY]   		; Reverse the vertical velocity of the ball
 		ret
@@ -303,15 +304,16 @@ PROC drawBricks
     
     brickloop:
         
+		
         mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]        ; x-coordinate
-        mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate
-        mov dx, [esi + (2 * Brick_Array_Columns + ecx) * 2]     ; color
+        mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate 
+        mov dx, [esi + (2 * Brick_Array_Columns + ecx) * 4]     ; color --> was *2 at the end and not *4
         
         call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx
         
 		inc ecx
 		
-        cmp ecx, Brick_Array_Total
+        cmp ecx, Brick_Array_Total   ;could also put initial value of ecx at Brick_Array_Total and dec ecx and loop brick loop is the same maybe easier to compute?
         jl brickloop
         
     ret
@@ -343,7 +345,7 @@ PROC main
 	;call drawBall, [Ball_X], [Ball_Y], [Ball_Size], [White]               			;draw the ball
 
 		
-	;call drawBricks
+	call drawBricks
 	
 	
 	checkTime:                      			;time checking loop
@@ -405,7 +407,7 @@ DATASEG
 
 	; paddle constants
 	Paddle_Y dd 180
-	Paddle_Width dd 19h                  	;default paddle width (25px)
+	Paddle_Width dd 28h                  	;default paddle width (25px)
 	Paddle_Height dd 07h              		;default paddle height (7px)
 	Paddle_V dd 0Fh               			;default paddle velocity (10 px/100th sec  ??? excesive speed)
 
