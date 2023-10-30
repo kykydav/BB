@@ -71,12 +71,12 @@ PROC drawRectangle
 ENDP drawRectangle
 
 PROC drawBall
-	ARG @@x:dword, @@y:dword, @@size:dword, @@col:word
+	ARG @@col:word
 	USES eax, ebx, ecx, edx
 
-	mov eax, [@@x]
-	mov ebx, [@@y]
-	mov ecx, [@@size]
+	mov eax, [Ball_X]
+	mov ebx, [Ball_Y]
+	mov ecx, [Ball_Size]
 	mov edx, ecx
 
 	sub ecx, 1
@@ -103,7 +103,7 @@ ENDP drawBall
 PROC drawPaddle
 		ARG @@col:word
 
-		call drawRectangle, [Paddle_X], [Paddle_Y], [Paddle_Width], [Paddle_Heigtht], [@@col]
+		call drawRectangle, [Paddle_X], [Paddle_Y], [Paddle_Width], [Paddle_Height], [@@col]
 
 		ret
 
@@ -138,60 +138,82 @@ ENDP waitForSpecificKeystroke
 
 PROC moveBall
 	mov eax, [Ball_VX]
-	add [Ball_X], eax							; Move in x Direction
+	add [Ball_X], eax			; Move in x Direction
 
 	; Those collision teste need to be adjusted to the size of the ball
 	cmp [Ball_X], 00h
-	jle negVelocityX							; If the ball hits left border, negate x velocity
+	jle negVelocityX			; If the ball hits left border, negate x velocity
 
 	mov eax, [Window_Width]
 	sub eax, [Ball_Size]
 	sub eax, [Ball_Size]
 
 	cmp [Ball_X], eax
-	jge negVelocityX							; If the ball hits right border, negate x velocity
+	jge negVelocityX			; If the ball hits right border, negate x velocity
 
 
 	mov eax, [Ball_VY]
-	add [Ball_Y], eax							; Move in y direction
+	add [Ball_Y], eax			; Move in y direction
 
 	cmp [Ball_Y], 00h
-	jle negVelocityY							; If the ball hits upper border, negate x velocity
+	jle negVelocityY			; If the ball hits upper border, negate x velocity
 
 	mov eax, [Window_Heigth]
 	sub eax, [Ball_Size]
 	
 	cmp [Ball_Y], eax
-	jge gameOver							; If the ball hits the lower border --> jump to gameOver
+	jge gameOver				; If the ball hits the lower border --> jump to gameOver
 
 ; Collision with bricks and paddle is done with AABB
+	
+	;condition 1 for collision	
+	mov eax, [Ball_X]			
+	add eax, [Ball_Size]		
+	add eax, [Ball_Size]		;maxX1 >= minX2
+	cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
+	jl brickCollision  		;if there's no collision exit collision with paddle (jump if less)
+	
+	;condition 2 for collision
+	mov eax, [Paddle_X]			
+	add eax, [Paddle_Width]		;minX1 <= maxX2
+	cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
+	jg brickCollision  		;if there's no collision exit collision with paddle (jump if greater)
+	
+	;condition 3 for collision
+	mov eax, [Ball_Y]			
+	add eax, [Ball_Size]		
+	add eax, [Ball_Size]		;maxY1 >= minY2
+	cmp eax, [Paddle_Y]			;Ball_Y + 2 * Ball_Size >= Paddle_Y
+	jl brickCollision  		;if there's no collision exit collision with paddle (jump if less)
+	
+	;condition 4 for collision
+	mov eax, [Paddle_Y]			
+	add eax, [Paddle_Height]	;minY1 <= maxY2
+	cmp [Ball_Y], eax			;Ball_Y <= Paddle_Y + Paddle_Height
+	jg brickCollision  		;if there's no collision exit collision with paddle (jump if greater)
+	
+; Check where the ball hits the paddle
+
+	; Check for collision with the top of the paddle
+	mov eax, [Ball_Y]			
+	add eax, [Ball_Size]		
+	add eax, [Ball_Size]		;maxY1 >= minY2
+	cmp eax, [Paddle_Y]			;Ball_Y + 2 * Ball_Size >= Paddle_Y
+	jle negVelocityY    	; Jump if Ball's bottom edge < Paddle's top edge
+	
+	; Check for collision on the left side of the paddle
+    mov eax, [Ball_X]			
+	add eax, [Ball_Size]		
+	add eax, [Ball_Size]		;maxX1 >= minX2
+	cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
+    jge negVelocityX   		; Jump if Ball's right edge > Paddle's left edge
+
+    ; Check for collision on the right side of the paddle
+    mov eax, [Paddle_X]			
+	add eax, [Paddle_Width]		;minX1 <= maxX2
+	cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
+    jle negVelocityX   		; Jump if Ball's left edge < Paddle's right edge
 		
-	
-	mov eax, [Ball_X]		;condition 1 for collision
-	add eax, [Ball_Size]	;maxx1 > minx2
-	cmp eax, [Paddle_X]		;Ball_X + Ball_Size > Paddle_X
-	jng brickCollision  	;if there's no collision exit collision with paddle
-	
-	mov eax, Paddle_X		;condition 2 for collision
-	add eax, Paddle_Width	;minx1 < maxx2
-	cmp Ball_X,eax			;Ball_X < Paddle_X + Paddle_Width
-	jnl brickCollision  	;if there's no collision exit collision with paddle
-	
-	mov eax,Ball_Y			;condition 3 for collision
-	add eax,Ball_Size		;maxy1 > miny2 
-	add eax,Ball_Size
-	add eax,Ball_Size
-	cmp eax,Paddle_Y		;Ball_Y + Ball_Size > Paddle_Y
-	jng brickCollision  	;if there's no collision exit collision with paddle
-	
-	mov eax, Paddle_Y		;condition 4 for collision
-	add eax, Paddle_Heigtht	;miny1 < maxy2
-	cmp Ball_Y, eax			;Ball_Y < Paddle_Y + Paddle_Heigtht
-	jnl brickCollision  	;if there's no collision exit collision with paddle
-	
-;       If it reaches this point, the ball is colliding with the right paddle
-	jmp negVelocityY
-	
 	brickCollision:
 
 
@@ -200,26 +222,26 @@ PROC moveBall
 
 
 
-	ret										; Needed otherwise go trough the rest of the procedure
+	ret							; Needed otherwise go trough the rest of the procedure
 	; is this needed as we have only one line
 	negVelocityY:
-		neg [Ball_VY]   				; Reverse the vertical velocity of the ball
+		neg [Ball_VY]   		; Reverse the vertical velocity of the ball
 		ret
 	negVelocityX:
-		neg [Ball_VX]              		; Reverses the horizontal velocity of the ball
+		neg [Ball_VX]           ; Reverses the horizontal velocity of the ball
 		ret
 	gameOver:
 		call terminateProcess
 ENDP moveBall
 
 
-PROC movePaddle								;Compute movement of the paddles
+PROC movePaddle					;Compute movement of the paddles
 
 ;       Paddle movement
 	checkPaddleMovement:
 		mov ah, 01h
 		int 16h
-		jz exitPaddleMovement 				;jz -> Jump If Zero | so if no key jump to exit
+		jz exitPaddleMovement 	;jz -> Jump If Zero | so if no key jump to exit
 
 		;check which key is being pressed (AL = ASCII character)
 		mov ah, 00h
@@ -227,14 +249,14 @@ PROC movePaddle								;Compute movement of the paddles
 
 		
 		;if it is 's' or 'S'  move left and 'd' or 'D' move right
-		cmp al, 73h 		; 's'
+		cmp al, 73h 			; 's'
 		je movePaddleLeft
-		cmp al, 53h			; 'S'
+		cmp al, 53h				; 'S'
 		je movePaddleLeft
 		
-		cmp al, 64h			; 'd'
+		cmp al, 64h				; 'd'
 		je movePaddleRight
-		cmp al, 44h			; 'D'
+		cmp al, 44h				; 'D'
 		je movePaddleRight
 		
 		ret
@@ -272,6 +294,29 @@ PROC movePaddle								;Compute movement of the paddles
 
 ENDP movePaddle
 
+;This code doesn't work yet
+PROC drawBricks
+    USES eax, ebx, ecx, edx
+    
+    mov esi, OFFSET Brick_Array
+	mov ecx, 0
+    
+    brickloop:
+        
+        mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]        ; x-coordinate
+        mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate
+        mov dx, [esi + (2 * Brick_Array_Columns + ecx) * 2]     ; color
+        
+        call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx
+        
+		inc ecx
+		
+        cmp ecx, Brick_Array_Total
+        jl brickloop
+        
+    ret
+
+ENDP drawBricks
 
 
 
@@ -297,9 +342,10 @@ PROC main
     ; Use the variables from DATASEG as arguments
 	;call drawBall, [Ball_X], [Ball_Y], [Ball_Size], [White]               			;draw the ball
 
-
-
-
+		
+	;call drawBricks
+	
+	
 	checkTime:                      			;time checking loop
 		;mov ah, 01h
 		;int 16h
@@ -320,21 +366,23 @@ PROC main
 
 		mov [Last_Time], dl              		;update time
 
-		call drawBall, [Ball_X], [Ball_Y], [Ball_Size], [Black]
-		call moveBall               			;move the ball
-		call drawBall, [Ball_X], [Ball_Y], [Ball_Size], [White]               			;draw the ball
+		call drawBall, [Black]		;remove the ball
+		call moveBall               								;move the ball
+		call drawBall, [White]     ;draw the ball
 
-		call drawPaddle, [Black]
-		call movePaddle            				;move the paddles (check for pressing of keys)
-		call drawPaddle, [White]          			;draw the paddles with the updated positions
+		call drawPaddle, [Black]	;remove the paddle			
+		call movePaddle            	;move the paddles (check for pressing of keys)
+		call drawPaddle, [White]    ;draw the paddles with the updated positions
 
-		jmp checkTime               			;after everything checks time again
+		jmp checkTime	;after everything checks time again
 
 		;call all update functions
 
     ;call waitForSpecificKeystroke, 001Bh 		; keycode for ESC
 	exitGame:
 		call terminateProcess
+
+
 
 ENDP main
 
@@ -358,7 +406,7 @@ DATASEG
 	; paddle constants
 	Paddle_Y dd 180
 	Paddle_Width dd 19h                  	;default paddle width (25px)
-	Paddle_Heigtht dd 07h              		;default paddle height (7px)
+	Paddle_Height dd 07h              		;default paddle height (7px)
 	Paddle_V dd 0Fh               			;default paddle velocity (10 px/100th sec  ??? excesive speed)
 
 	;Game Constatnt
@@ -372,8 +420,16 @@ DATASEG
 	White dw 15
 	
 	;Bricks
-	;Bricks_X dd 5 ,
-	;Bricks_Y
+	Brick_Array_Rows EQU 3
+	Brick_Array_Columns EQU 40
+	Brick_Array_Total EQU Brick_Array_Rows * Brick_Array_Columns
+	
+	Brick_Array dd 8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287	;x-coordinate bricks
+				dd 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 						21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 			34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 			47, 47, 47, 47, 47, 47, 47, 47, 47, 47			;y-coordinate bricks
+				dw 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,						2, 2, 2, 2, 2, 2, 2, 2, 2, 2,						3, 3, 3, 3, 3, 3, 3, 3, 3, 3,						4, 4, 4, 4, 4, 4, 4, 4, 4, 4					;health and color
+	
+	Brick_Width dd 25
+	Brick_Height dd 7
 	
 ; -------------------------------------------------------------------
 ; STACK
