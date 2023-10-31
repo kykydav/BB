@@ -300,6 +300,7 @@ PROC drawBricks
     USES eax, ebx, ecx, edx
     
     mov esi, OFFSET Brick_Array
+	mov edi, OFFSET Brick_Array_Color
 	mov ecx, 0
     
     brickloop:
@@ -307,13 +308,13 @@ PROC drawBricks
 		
         mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]        ; x-coordinate
         mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate 
-        mov dx, [esi + (2 * Brick_Array_Columns + ecx) * 4]     ; color --> was *2 at the end and not *4
+        ;mov edx, [edi + (Brick_Array_Columns + ecx) * 4]     ; color --> was *2 at the end and not *4
         
-        call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx
+        call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], 15
         
 		inc ecx
 		
-        cmp ecx, Brick_Array_Total   ;could also put initial value of ecx at Brick_Array_Total and dec ecx and loop brick loop is the same maybe easier to compute?
+        cmp ecx, 40   ;could also put initial value of ecx at Brick_Array_Total and dec ecx and loop brick loop is the same maybe easier to compute?
         jl brickloop
         
     ret
@@ -428,7 +429,8 @@ DATASEG
 	
 	Brick_Array dd 8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287	;x-coordinate bricks
 				dd 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 						21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 			34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 			47, 47, 47, 47, 47, 47, 47, 47, 47, 47			;y-coordinate bricks
-				dw 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,						2, 2, 2, 2, 2, 2, 2, 2, 2, 2,						3, 3, 3, 3, 3, 3, 3, 3, 3, 3,						4, 4, 4, 4, 4, 4, 4, 4, 4, 4					;health and color
+				
+	Brick_Array_Color			dd 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,						2, 2, 2, 2, 2, 2, 2, 2, 2, 2,						3, 3, 3, 3, 3, 3, 3, 3, 3, 3,						4, 4, 4, 4, 4, 4, 4, 4, 4, 4					;health and color
 	
 	Brick_Width dd 25
 	Brick_Height dd 7
