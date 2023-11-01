@@ -160,11 +160,11 @@ PROC moveBall
 		mov eax, [Ball_X]
 		add eax, [Ball_Size]	; calculate the x-coordinate of the center of the ball
 		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
-		mov ebx, 1Fh			; 31 px per column
+		mov ebx, 1Fh			; 31 px per column tting
 		xor edx, edx
 		div ebx                 ; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
 		
-		mov ebx, eax			; store column index in ebx
+		push eax				; store column index in stack
 		
 		mov eax, [Ball_Y]
 		add eax, [Ball_Size]	; calculate the y-coordinate of the center of the ball
@@ -173,13 +173,17 @@ PROC moveBall
 		xor edx, edx
 		div ebx					; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
 
+		pop ebx	
+
 		cmp [Ball_Y], 174
 		jle brickCollision
-
+		
+						; restores column index in ebx
+		
 ; Collision with bricks and paddle is done with AABB
 	
 	paddleColision:
-		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once
+		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once 
 		mov ebx, [Paddle_Width]
 		mov edx, [Paddle_Height]
 		jmp collisionCheck		; Jump to collisionCheck to check the collision with the paddle
@@ -235,7 +239,42 @@ PROC moveBall
 		jle negVelocityY										;Jump if Balls top edge <= blocks bottom edge
 		
 		; as you do not hit from above you certainly hit from a side so just negate x speed 	
-		jmp negVelocityX		; not 100% sure its not worse but in theory should work 
+		; Now as it collides from the side we want to make sure the 
+		;ball never hovers in the paddle 
+		;( This could happen if the player moves the paddle when the ball is at the same heigth
+		; and the paddle would then "teleport" "around" the ball)
+		; if Ball_X + Ball_Size/2 < Paddle_X + Paddle_Width/2 --> Ball_X = Paddle_X - Ball_Size
+		; else Ball_X = Paddle_X + Paddle_Width
+		
+		mov eax, [Ball_Size]
+		mov ebx, 02h
+		xor edx, edx
+		div ebx 												;Store in eax Ball_Size/2
+		add [Ball_X], eax										;Store in eax Ball_X + Ball_Size/2
+		
+		push eax
+		
+		mov eax, [Paddle_Width]
+		mov ebx, 02h
+		xor edx, edx
+		div ebx 												;Store in eax Paddle_Width/2
+		mov ebx, [esi]											; Paddle_X
+		add eax, ebx											;Store in eax Paddle_X + Paddle_Width/2
+		
+		pop ebx
+		
+		cmp ebx, eax
+		jle leftOfPaddle
+		;RightOfPaddle
+		mov edx, [esi]
+		add edx, [Paddle_Width]
+		mov [Ball_X], edx
+		leftOfPaddle:
+		mov edx, [esi]
+		sub edx, [Ball_Size]
+		mov [Ball_X], edx
+		
+		jmp negVelocityX		 
 	
 	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
 	negVelocityY:
