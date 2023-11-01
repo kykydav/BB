@@ -116,41 +116,19 @@ PROC drawPaddle
 ENDP drawPaddle
 
 
-
-
-; ; Wait for a specific keystroke.
-PROC waitForSpecificKeystroke
-	USES eax
-	press_check:
-		mov ah, 01h
-		int 16h
-		jz press_check
-
-		mov ah, 00h
-		int 16h
-
-		cmp al, 27		;27 is ASCII code for 'ESC'
-		jne press_check
-
-	mov ax, 03h
-	int 10h
-
-	ret
-
-ENDP waitForSpecificKeystroke
-
-
-
-
 PROC moveBall
 	mov eax, [Ball_VX]
 	add [Ball_X], eax			; Move in x Direction
 
 	; Those collision teste need to be adjusted to the size of the ball
-	cmp [Ball_X], 00h
+	mov eax, [Ball_Size]
+	add eax, [Ball_Size]
+	;add eax, [Ball_Size]
+	cmp [Ball_X], eax
 	jle negVelocityX			; If the ball hits left border, negate x velocity
 
 	mov eax, [Window_Width]
+	sub eax, [Ball_Size]
 	sub eax, [Ball_Size]
 	sub eax, [Ball_Size]
 
@@ -177,58 +155,118 @@ PROC moveBall
 	add eax, [Ball_Size]		
 	add eax, [Ball_Size]		;maxX1 >= minX2
 	cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
-	jl brickCollision  		;if there's no collision exit collision with paddle (jump if less)
+	jl gridPanel  		;if there's no collision exit collision with paddle (jump if less)
 	
 	;condition 2 for collision
 	mov eax, [Paddle_X]			
 	add eax, [Paddle_Width]		;minX1 <= maxX2
 	cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
-	jg brickCollision  		;if there's no collision exit collision with paddle (jump if greater)
+	jg gridPanel  		;if there's no collision exit collision with paddle (jump if greater)
 	
 	;condition 3 for collision
 	mov eax, [Ball_Y]			
 	add eax, [Ball_Size]		
 	add eax, [Ball_Size]		;maxY1 >= minY2
 	cmp eax, [Paddle_Y]			;Ball_Y + 2 * Ball_Size >= Paddle_Y
-	jl brickCollision  		;if there's no collision exit collision with paddle (jump if less)
+	jl gridPanel  			;if there's no collision exit collision with paddle (jump if less)
 	
 	;condition 4 for collision
 	mov eax, [Paddle_Y]			
 	add eax, [Paddle_Height]	;minY1 <= maxY2
 	cmp [Ball_Y], eax			;Ball_Y <= Paddle_Y + Paddle_Height
-	jg brickCollision  		;if there's no collision exit collision with paddle (jump if greater)
+	jg gridPanel  			;if there's no collision exit collision with paddle (jump if greater)
 	
 ; Check where the ball hits the paddle
-
-	; Check for collision with the top of the paddle
+	
 	mov eax, [Ball_Y]			
 	add eax, [Ball_Size]		
 	add eax, [Ball_Size]		;maxY1 >= minY2
 	cmp eax, [Paddle_Y]			;Ball_Y + 2 * Ball_Size >= Paddle_Y
-	jle negVelocityY    	; Jump if Ball's bottom edge < Paddle's top edge
+	jle negVelocityY    		; Jump if Ball's bottom edge < Paddle's top edge
 	
-	;--> those 2 are not needed as you do not hit from above you certainly hit from a side so just negate x speed 	
-	; Check for collision on the left side of the paddle 
-;    mov eax, [Ball_X]			
-;	add eax, [Ball_Size]		
-;	add eax, [Ball_Size]		;maxX1 >= minX2
-;	cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
-;   jge negVelocityX   		; Jump if Ball's right edge > Paddle's left edge
-;
-;    ; Check for collision on the right side of the paddle
-;   mov eax, [Paddle_X]			
-;	;add eax, [Paddle_Width]		;minX1 <= maxX2
-;	cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
-;   jle negVelocityX   		; Jump if Ball's left edge < Paddle's right edge
+; as you do not hit from above you certainly hit from a side so just negate x speed 	
 	jmp negVelocityX		; not 100% sure its not worse but in theory should work 
-	brickCollision:
+	
+	
+; Brick Collision	
+; split in 10 columns
+	gridPanel:
+		mov ecx, 0
+		; determine wich column should be checked
+		mov eax, [Ball_X]
+		mov cx, 20h				; 32 px per column
+		xor bx, bx
+		div cx                   ; stores the column(0 based index), where Ball_X is in, in AX and in DX the rest (if 
+		cmp dx, 16h				; if there are at least 22 px over. or less 7 then you have to respectively check the column after and the column before 
+		jl indexColumn						; put another extre index to check
+		inc dx
+		push dx
+		dec dx
+		inc ecx
+		indexColumn:
+		push dx
+		inc ecx
+		;cmp dx, 07h				; actually don't think we need this because Ball_X is already the minimal x of the ball
 
 
+		mov eax, [Ball_Y]
+		mov cx, 15				; 15 px per row
+		xor bx, bx
+		div cx                   ; stores the row (0 based index), where Ball_Y is in, in AX and in DX the res
+		cmp dx, 16h				; if there are at least 10 px over. or less 7 then you have to respectively check the column after and the column before
+		jl indexRow						; put another extre index to check
+		inc dx
+		push dx
+		dec dx
+		inc ecx
+		indexRow:
+		push dx
+		inc ecx
 
-
-
-
-
+	checkBrickCollision:
+		;condition 1 for collision	
+		mov eax, [Ball_X]			
+		add eax, [Ball_Size]		
+		add eax, [Ball_Size]		;maxX1 >= minX2
+		cmp eax, [Paddle_X]			;Ball_X + 2 * Ball_Size >= Paddle_X
+		jl gridPanel  		;if there's no collision exit collision with paddle (jump if less)
+		
+		;condition 2 for collision
+		mov eax, [Paddle_X]			
+		add eax, [Paddle_Width]		;minX1 <= maxX2
+		cmp [Ball_X], eax			;Ball_X <= Paddle_X + Paddle_Width
+		jg gridPanel  		;if there's no collision exit collision with paddle (jump if greater)
+		
+		;condition 3 for collision
+		mov eax, [Ball_Y]			
+		add eax, [Ball_Size]		
+		add eax, [Ball_Size]		;maxY1 >= minY2
+		cmp eax, [Paddle_Y]			;Ball_Y + 2 * Ball_Size >= Paddle_Y
+		jl gridPanel  			;if there's no collision exit collision with paddle (jump if less)
+		
+		;condition 4 for collision
+		mov eax, [Paddle_Y]			
+		add eax, [Paddle_Height]	;minY1 <= maxY2
+		cmp [Ball_Y], eax			;Ball_Y <= Paddle_Y + Paddle_Height
+		jg gridPanel  			;if there's no collision exit collision with paddle (jump if greater)
+	
+		
+		
+		
+		
+		
+		loop checkBrickCollision
+	
+	
+	
+	;mov eax, [Ball_X]
+	;cmp eax, A0h			; screenwidth/2 
+	;jge rightScreen
+	;cmp eax, 43h			; +- screenwidth/4 (43h=67) (splits such as it splits the blocks in collumns)
+	;jge colums345
+	;cmp eax, 24h
+	
+	endMoveBall:
 	ret							; Needed otherwise go trough the rest of the procedure
 	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
 	negVelocityY:
@@ -326,6 +364,29 @@ PROC drawBricks
     ret
 
 ENDP drawBricks
+
+
+
+; ; Wait for a specific keystroke.
+PROC waitForSpecificKeystroke
+	USES eax
+	press_check:
+		mov ah, 01h
+		int 16h
+		jz press_check
+
+		mov ah, 00h
+		int 16h
+
+		cmp al, 27		;27 is ASCII code for 'ESC'
+		jne press_check
+
+	mov ax, 03h
+	int 10h
+
+	ret
+
+ENDP waitForSpecificKeystroke
 
 
 
