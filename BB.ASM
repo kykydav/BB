@@ -229,8 +229,8 @@ PROC moveBall
 		
 		
 		; de twee volgende lijnen laten het crashen
-		push ebx							;Stores Brick_Width
 		push edx							;Stores Brick_Height
+		push ebx							;Stores Brick_Width
 		
 		
 
@@ -245,74 +245,89 @@ PROC moveBall
 		;we assume that it is not possible to hit a side that point in the direction of V
 		; (so if VY < 0 then can't hit the top side) 	
 		cmp [Ball_VY], 0
-		jl cannotHitTOP
-		;je OnlyHitFromSides
-		;Check if there is there is an hit from the left		
-		;Block_Y - Ball_Y_mid  = (Block_Y - Ball_Size) - Ball_Y
-		pop edx
-		mov edx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-		sub edx, [Ball_Size]											; Block_Y - Ball_Size
-		sub edx, [Ball_Y]											;(Block_Y - Ball_Size) - Ball_Y
-		jmp cmpVX
-		cannotHitTOP:
-		;(Block_Y + Block_Height) - Ball_Y_mid = (Block_Y + Block_Height - Ball_Size) - Ball_Y
-		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-		sub ebx, [Ball_Size]											; Block_Y - Ball_Size
-		pop edx
-		add ebx, edx
-		mov edx, [Ball_Y]
-		sub edx, ebx											;Ball_Y - (Block_Y + Block_Height - Ball_Size)
+		jl cannotHitTop
+			; cannot hit bottom 
+			; check if intersect with top if not it intersects with side
+			; s1 = (Ball_Y+2*Ball_Size - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X+Ball_Size - Block_X)
+			; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
+			; If s1 > 0 and S1 == s2 --> no intersect
+			
+			;s1
+			mov edx, [Ball_Y]
+			add edx, [Ball_Size]
+			add edx, [Ball_Size]									;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
+			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+			sub edx, ebx
+			pop ebx
+			imul edx, ebx 
+			push ebx
+			cmp eax, 0
+			jg hitSide
+			;s2
+			mov ecx, [Ball_Y]
+			sub ecx, [Ball_VY]								;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
+			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+			sub ecx, ebx
+			pop ebx
+			imul ecx, ebx 
+			push ebx
+			cmp eax, edx
+			je hitSide
+			; From here on it intersects with top 
+			jmp negVelocityY
 		
-		cmpVX:
-		cmp [Ball_VX], 0
-		jl cannotHitLeft
-		;Block_X - Ball_X_mid = (Block_X - Ball_Size) - Ball_X 
-		pop ebx
-		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]
-		sub eax, [Ball_Size]											; Block_X - Ball_Size
-		sub eax, [Ball_X]											;(Block_X - Ball_Size) - Ball_X
+		cannotHitTop:
+		; cannot hit top so check if hits bottom if not hits side
+		; check if intersect with bottom if not it intersects with right
+		; s1 = (Ball_Y+2*Ball_Size - (Block_Y + Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth -(Block_Y + Block_Heigth))*((Ball_X+Ball_Size - Block_X)
+		; s2 = (Ball_Y - Ball_VY - (Block_Y+ Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth - (Block_Y + Block_Heigth))*((Ball_X - Ball_VX - Block_X)
+		; If s1 > 0 and S1 == s2 --> no intersect
 		
-		jmp compareDistances
-		cannotHitLeft:
-		;Ball_X_mid - (Block_X + Block_Width) = Ball_X - (Block_X + Block_Width - Ball_Size)  
-		mov ecx, [esi + (0 * Brick_Array_Columns + ecx) * 4]
-		sub ecx, [Ball_Size]											; Block_X - Ball_Size
-		pop ebx
-		add ecx, ebx 											; Block_X + Block_Width - Ball_Size
-		mov eax, [Ball_X]
-		sub eax, ecx											; Ball_X - (Block_X + Block_Width - Ball_Size)
+			;s1
+			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+			pop eax 
+			pop edx
+			add ebx, edx
+			push edx												;we do the above before assigning [Ball_Y] to eax so that we have enough
+			push eax 												;registers to store the top 2 layers of the stack
+			mov edx, [Ball_Y]
+			add edx, [Ball_Size]
+			add edx, [Ball_Size]									;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
+			sub edx, ebx
+			pop ebx
+			imul edx, ebx 
+			push ebx
+			cmp eax, 0
+			jg hitSide
+			mov edx, eax
+			
+			;s2
+			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+			pop eax 
+			pop ecx
+			add ebx, ecx
+			push ecx												;we do the above before assigning [Ball_Y] to eax so that we have enough
+			push eax 												;registers to store the top 2 layers of the stack
+			mov ecx, [Ball_Y]
+			sub ecx, [Ball_VY]								;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
+			sub ecx, ebx
+			pop ebx
+			imul ecx, ebx 
+			push ebx
+			cmp edx, ecx
+			je hitSide
+			
+		hitSide:
+			cmp [Ball_VX], 0
+			jl hitRight										; The differentiation is not needed
+			;hitLeft
+			jmp negVelocityX
+			hitRight:
+			jmp negVelocityX
+			; From here on it intersects with top 
+			jmp negVelocityY
 		
-		compareDistances:
-		; compare eax ( distance with side) and edx (distance with top or bottom) 
-		;if eax/edx > Ball_X/Ball_Y --> proportionally the horizontal distance is greater it hit from above becaus one Ball_move alone cannot get this horizontal distance withou having an original distance
-		
-		mov [d_hor], eax
-		mov [d_vert], edx
-
-		fld1
-		fild [d_hor]
-		fild [d_vert]
-		fdiv
-		fstp [d_ratio]
-		V_Ratio dd 0
-		fld1
-		fild [Ball_X]
-		fild [Ball_Y]
-		fdiv
-		fstp [V_Ratio]
-		mov eax, [d_ratio]
-		mov edx, [V_Ratio] 
-		
-		cmp eax, edx
-		jg hitFromSide
-		
-		jmp negVelocityY
-		
-		hitFromSide:
-		jmp negVelocityX
-		
-		;Collision with upper side
-		
+		ret
 	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
 	negVelocityY:
 		neg [Ball_VY]   		; Reverse the vertical velocity of the ball
@@ -321,9 +336,10 @@ PROC moveBall
 		neg [Ball_VX]           ; Reverses the horizontal velocity of the ball
 		ret
 	endMoveBall:
-	ret							; Needed otherwise go trough the rest of the procedure
+		ret							; Needed otherwise go trough the rest of the procedure
 	gameOver:
 		call terminateProcess
+	ret
 ENDP moveBall
 
 
@@ -512,7 +528,7 @@ DATASEG
 	Ball_Y dd 100
 	; The speed is constant in magnitude but they are not constants as they vary in sign.	
 	Ball_VX dd 05h               			;X (horizontal) velocity of the ball (5px)
-	Ball_VY dd -02           				;Y (vertical) velocity of the ball (2px)
+	Ball_VY dd 02           				;Y (vertical) velocity of the ball (2px)
 
 	; Ball constants
 	Ball_Size dd 3
