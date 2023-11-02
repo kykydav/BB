@@ -197,7 +197,7 @@ PROC moveBall
 		mov ebx, [Brick_Width]
 		mov edx, [Brick_Height]
 		jmp collisionCheck
-	
+		
 	collisionCheck:
 		;condition 1 for collision	
 		mov eax, [Ball_X]			
@@ -225,57 +225,93 @@ PROC moveBall
 		cmp [Ball_Y], eax										;Ball_Y <= block_Y + block_Height
 		jg endMoveBall  										;if there's no collision exit collision with block (jump if greater)
 		
+		
+		; de twee volgende lijnen laten het crashen
+		push ebx 												;Stores Brick_Width
+		push edx 												;Stores Brick_Height
+		
+		
+
 		; Check where the ball hits the top of the blok
 		
-		mov eax, [Ball_Y]			
-		add eax, [Ball_Size]		
-		add eax, [Ball_Size]									;maxY1 >= minY2
-		cmp eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]	;Ball_Y + 2 * Ball_Size > block_Y
-		jge negVelocityY    									;Jump if Balls bottom edge <= blocks top edge
-		
-		mov eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-		add eax, edx											;minY1 >= maxY2
-		cmp [Ball_Y], eax										;block_Y > Ball_Y
-		jle negVelocityY										;Jump if Balls top edge <= blocks bottom edge
-		
-		; as you do not hit from above you certainly hit from a side so just negate x speed 	
-		; Now as it collides from the side we want to make sure the 
-		;ball never hovers in the paddle 
-		;( This could happen if the player moves the paddle when the ball is at the same heigth
-		; and the paddle would then "teleport" "around" the ball)
-		; if Ball_X + Ball_Size/2 < Paddle_X + Paddle_Width/2 --> Ball_X = Paddle_X - Ball_Size
-		; else Ball_X = Paddle_X + Paddle_Width
 		
 		mov eax, [Ball_Size]
-		mov ebx, 02h
+		mov ebx, 02h		
 		xor edx, edx
-		div ebx 												;Store in eax Ball_Size/2
-		add [Ball_X], eax										;Store in eax Ball_X + Ball_Size/2
+		div ebx 				;Store in eax Ball_Size/2
 		
-		push eax
+		;we assume that it is not possible to hit a side that point in the direction of V
+		; (so if VY < 0 then can't hit the top side) 	
+		cmp [Ball_VY], 0
+		jl cannotHitTOP
+		;je OnlyHitFromSides
+		;Check if there is there is an hit from the left		
+		;Ball_Y_mid - Block_Y = Ball_Y -(Block_Y - Ball_Size/2)
+		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+		sub ebx, eax											; Block_Y - Ball_Size/2
+		mov edx, [Ball_X]
+		sub edx, ebx											;Ball_Y -(Block_Y - Ball_Size/2)
+		jmp cmpVX
+		cannotHitTOP:
+		;(Block_Y + Block_Height) - Ball_Y_mid = (Block_Y + Block_Height - Ball_Size/2) - Ball_X
+		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+		sub ebx, eax											; Block_Y - Ball_Size/2
+		pop edx
+		add ebx, edx
+		mov edx, [Ball_X]
+		sub edx, ebx											;Ball_Y -(Block_Y - Ball_Size/2)
 		
-		mov eax, [Paddle_Width]
-		mov ebx, 02h
-		xor edx, edx
-		div ebx 												;Store in eax Paddle_Width/2
-		mov ebx, [esi]											; Paddle_X
-		add eax, ebx											;Store in eax Paddle_X + Paddle_Width/2
+		cmpVX:
+		cmp [Ball_VX], 0
+		jl cannotHitLeft
+		;Ball_X_mid - Block_X = Ball_X -(Block_X - Ball_Size/2) 
+		mov ebx, [esi + (0 * Brick_Array_Columns + ecx) * 4]
+		sub ebx, eax											; Block_X - Ball_Size/2
+		mov eax, [Ball_X]
+		sub eax, ebx
 		
-		pop ebx
+		jmp compareDistances
+		cannotHitLeft:
+		;(Block_X + Block_Width) - Ball_X_mid = (Block_X + Block_Width - Ball_Size/2) - Ball_X  
+		mov ebx, [esi + (0 * Brick_Array_Columns + ecx) * 4]
+		sub ebx, eax											; Block_X - Ball_Size/2
+		pop ecx
+		add ecx, ebx 											; Block_X + Block_Width - Ball_Size/2
+		mov eax, [Ball_X]
+		sub eax, ebx	
 		
-		cmp ebx, eax
-		jle leftOfPaddle
-		;RightOfPaddle
-		mov edx, [esi]
-		add edx, [Paddle_Width]
-		mov [Ball_X], edx
-		leftOfPaddle:
-		mov edx, [esi]
-		sub edx, [Ball_Size]
-		mov [Ball_X], edx
+		compareDistances:
+		; compare eax ( distance with side) and edx (distance with top or bottom) 
+		;if eax/edx > Ball_X/Ball_Y --> proportionally the horizontal distance is greater it hit from above becaus one Ball_move alone cannot get this horizontal distance withou having an original distance
+		d_ratio dd 0
+		d_hor dd 0
+		d_vert dd 0
+		mov [d_hor], eax
+		mov [d_vert], edx
+
+		fld1
+		fild [d_hor]
+		fild [d_vert]
+		fdiv
+		fstp [d_ratio]
+		V_Ratio dd 0
+		fld1
+		fild [Ball_X]
+		fild [Ball_Y]
+		fdiv
+		fstp [V_Ratio]
+		mov eax, [d_ratio]
+		mov edx, [V_Ratio] 
 		
-		jmp negVelocityX		 
-	
+		cmp eax, ebx
+		jg hitFromSide
+		jmp negVelocityY
+		ret
+		hitFromSide:
+		jmp negVelocityX
+		
+		;Collision with upper side
+		
 	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
 	negVelocityY:
 		neg [Ball_VY]   		; Reverse the vertical velocity of the ball
@@ -475,7 +511,7 @@ DATASEG
 	Ball_Y dd 100
 	; The speed is constant in magnitude but they are not constants as they vary in sign.	
 	Ball_VX dd 05h               			;X (horizontal) velocity of the ball (5px)
-	Ball_VY dd 02h           				;Y (vertical) velocity of the ball (2px)
+	Ball_VY dd -02           				;Y (vertical) velocity of the ball (2px)
 
 	; Ball constants
 	Ball_Size dd 3
