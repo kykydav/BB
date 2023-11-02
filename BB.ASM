@@ -210,6 +210,7 @@ PROC moveBall
 		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]	;initialize block_X in eax
 		add eax, ebx											;minX1 <= maxX2
 		cmp [Ball_X], eax										;Ball_X <= block_X + block_Width
+		 												
 		jg endMoveBall  										;if there's no collision exit collision with block (jump if greater)
 		
 		;condition 3 for collision
@@ -223,22 +224,23 @@ PROC moveBall
 		mov eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]	;initialize block_Y in eax		
 		add eax, edx											;minY1 <= maxY2
 		cmp [Ball_Y], eax										;Ball_Y <= block_Y + block_Height
+		 												
 		jg endMoveBall  										;if there's no collision exit collision with block (jump if greater)
 		
 		
 		; de twee volgende lijnen laten het crashen
-		push ebx 												;Stores Brick_Width
-		push edx 												;Stores Brick_Height
+		push ebx							;Stores Brick_Width
+		push edx							;Stores Brick_Height
 		
 		
 
 		; Check where the ball hits the top of the blok
 		
 		
-		mov eax, [Ball_Size]
-		mov ebx, 02h		
-		xor edx, edx
-		div ebx 				;Store in eax Ball_Size/2
+		; mov eax, [Ball_Size]
+		; mov ebx, 02h		
+		; xor edx, edx
+		; div ebx 				;Store in eax Ball_Size/2
 		
 		;we assume that it is not possible to hit a side that point in the direction of V
 		; (so if VY < 0 then can't hit the top side) 	
@@ -246,46 +248,44 @@ PROC moveBall
 		jl cannotHitTOP
 		;je OnlyHitFromSides
 		;Check if there is there is an hit from the left		
-		;Ball_Y_mid - Block_Y = Ball_Y -(Block_Y - Ball_Size/2)
-		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-		sub ebx, eax											; Block_Y - Ball_Size/2
-		mov edx, [Ball_X]
-		sub edx, ebx											;Ball_Y -(Block_Y - Ball_Size/2)
+		;Block_Y - Ball_Y_mid  = (Block_Y - Ball_Size) - Ball_Y
+		pop edx
+		mov edx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+		sub edx, [Ball_Size]											; Block_Y - Ball_Size
+		sub edx, [Ball_Y]											;(Block_Y - Ball_Size) - Ball_Y
 		jmp cmpVX
 		cannotHitTOP:
-		;(Block_Y + Block_Height) - Ball_Y_mid = (Block_Y + Block_Height - Ball_Size/2) - Ball_X
+		;(Block_Y + Block_Height) - Ball_Y_mid = (Block_Y + Block_Height - Ball_Size) - Ball_Y
 		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-		sub ebx, eax											; Block_Y - Ball_Size/2
+		sub ebx, [Ball_Size]											; Block_Y - Ball_Size
 		pop edx
 		add ebx, edx
-		mov edx, [Ball_X]
-		sub edx, ebx											;Ball_Y -(Block_Y - Ball_Size/2)
+		mov edx, [Ball_Y]
+		sub edx, ebx											;Ball_Y - (Block_Y + Block_Height - Ball_Size)
 		
 		cmpVX:
 		cmp [Ball_VX], 0
 		jl cannotHitLeft
-		;Ball_X_mid - Block_X = Ball_X -(Block_X - Ball_Size/2) 
-		mov ebx, [esi + (0 * Brick_Array_Columns + ecx) * 4]
-		sub ebx, eax											; Block_X - Ball_Size/2
-		mov eax, [Ball_X]
-		sub eax, ebx
+		;Block_X - Ball_X_mid = (Block_X - Ball_Size) - Ball_X 
+		pop ebx
+		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]
+		sub eax, [Ball_Size]											; Block_X - Ball_Size
+		sub eax, [Ball_X]											;(Block_X - Ball_Size) - Ball_X
 		
 		jmp compareDistances
 		cannotHitLeft:
-		;(Block_X + Block_Width) - Ball_X_mid = (Block_X + Block_Width - Ball_Size/2) - Ball_X  
-		mov ebx, [esi + (0 * Brick_Array_Columns + ecx) * 4]
-		sub ebx, eax											; Block_X - Ball_Size/2
-		pop ecx
-		add ecx, ebx 											; Block_X + Block_Width - Ball_Size/2
+		;Ball_X_mid - (Block_X + Block_Width) = Ball_X - (Block_X + Block_Width - Ball_Size)  
+		mov ecx, [esi + (0 * Brick_Array_Columns + ecx) * 4]
+		sub ecx, [Ball_Size]											; Block_X - Ball_Size
+		pop ebx
+		add ecx, ebx 											; Block_X + Block_Width - Ball_Size
 		mov eax, [Ball_X]
-		sub eax, ebx	
+		sub eax, ecx											; Ball_X - (Block_X + Block_Width - Ball_Size)
 		
 		compareDistances:
 		; compare eax ( distance with side) and edx (distance with top or bottom) 
 		;if eax/edx > Ball_X/Ball_Y --> proportionally the horizontal distance is greater it hit from above becaus one Ball_move alone cannot get this horizontal distance withou having an original distance
-		d_ratio dd 0
-		d_hor dd 0
-		d_vert dd 0
+		
 		mov [d_hor], eax
 		mov [d_vert], edx
 
@@ -303,10 +303,11 @@ PROC moveBall
 		mov eax, [d_ratio]
 		mov edx, [V_Ratio] 
 		
-		cmp eax, ebx
+		cmp eax, edx
 		jg hitFromSide
+		
 		jmp negVelocityY
-		ret
+		
 		hitFromSide:
 		jmp negVelocityX
 		
@@ -521,8 +522,8 @@ DATASEG
 
 	; paddle constants
 	; Paddle_Y dd 180
-	Paddle_Width dd 28h                  	;default paddle width (25px)
-	Paddle_Height dd 07h              		;default paddle height (7px)
+	Paddle_Width dd 25                  	;default paddle width (25px)
+	Paddle_Height dd 7              		;default paddle height (7px)
 	Paddle_V dd 0Fh               			;default paddle velocity (10 px/100th sec  ??? excesive speed)
 
 	;Game Constatnt
@@ -536,6 +537,10 @@ DATASEG
 	White dw 15
 	
 	;Bricks
+	
+	d_ratio dd 0
+	d_hor dd 0
+	d_vert dd 0
 	
 	Brick_Array 		dd 160, 	8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287	;x-coordinate bricks (first column is for Paddle_X)
 						dd 180, 	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 						21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 			34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 			47, 47, 47, 47, 47, 47, 47, 47, 47, 47			;y-coordinate bricks (first column is for Paddle_Y)
