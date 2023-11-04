@@ -3,8 +3,8 @@
 ; 32-bit x86 assembly language
 ; TASM
 ;
-; author:	David Blinder, Stijn Bettens
-; date:		23/10/2018
+; author:	David Kyan, Petrosyan Artyom
+; date:		19/10/2023
 ; program:	Video mode 13h
 ; -------------------------------------------------------------------
 
@@ -40,6 +40,7 @@ PROC setVideoMode
 ENDP setVideoMode
 
 PROC drawRectangle
+; @@ is not needed and then you can even use just the name in the procedure
 	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@col:byte   ; col = 15 is white
 	USES 	eax, ecx, edx, edi ; note: MUL uses edx!
 
@@ -246,99 +247,60 @@ PROC moveBall
 		
 		;we assume that it is not possible to hit a side that point in the direction of V
 		; (so if VY < 0 then can't hit the top side) 	
+		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]			; Ax
+		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]			; AY, BY
+		pop edx
+		add edx, eax
+		
 		cmp [Ball_VY], 0
 		jl cannotHitTop
+			pop ecx				; otherwise there is an push too much !!!!
 			; cannot hit bottom 
 			; check if intersect with top if not it intersects with side
 			; s1 = (Ball_Y+2*Ball_Size - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X+Ball_Size - Block_X)
 			; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
 			; If s1 > 0 and S1 == s2 --> no intersect
 			
-			;s1
-			mov edx, [Ball_Y]
-			add edx, [Ball_Size]
-			add edx, [Ball_Size]									;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
-			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-			sub edx, ebx
-			mov ebx, [esp]
-			imul edx, ebx 
+			call intersect, eax, ebx, edx
 			cmp eax, 0
-			jg hitSide
-			;s2
-			mov ecx, [Ball_Y]
-			sub ecx, [Ball_VY]								;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
-			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-			sub ecx, ebx
-			mov ebx, [esp]
-			imul ecx, ebx 
-			cmp eax, edx
 			je hitSide
 			; From here on it intersects with top 
-			jmp negVelocityYBox
+			jmp negVelocityY
 		
 		cannotHitTop:
 		; cannot hit top so check if hits bottom if not hits side
 		; check if intersect with bottom if not it intersects with right
-		; s1 = (Ball_Y+2*Ball_Size - (Block_Y + Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth -(Block_Y + Block_Heigth))*((Ball_X+Ball_Size - Block_X)
+		; s1 = (Ball_Y-2*Ball_Size - (Block_Y + Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth -(Block_Y + Block_Heigth))*((Ball_X+Ball_Size - Block_X)
 		; s2 = (Ball_Y - Ball_VY - (Block_Y+ Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth - (Block_Y + Block_Heigth))*((Ball_X - Ball_VX - Block_X)
 		; If s1 > 0 and S1 == s2 --> no intersect
+			pop ecx
+			add ebx, ecx	
+			call intersect, eax, ebx, edx
+			cmp eax, 0
+			jl hitSide
+			; From here on it intersects with top 
+			jmp negVelocityY
 		
-			;s1
-			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-			mov edx, [esp]
-			add ebx, edx
-			mov edx, [Ball_Y]
-			add edx, [Ball_Size]
-			add edx, [Ball_Size]									;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
-			sub edx, ebx
-			mov ebx, [esp]
-			imul edx, ebx 
-			cmp edx, 0
-			jg hitSide
-			
-			
-			;s2
-			mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-			mov edx, [esp-4]
-			add ebx, ecx											;registers to store the top 2 layers of the stack
-			mov ecx, [Ball_Y]
-			sub ecx, [Ball_VY]								;add 2 times size (radius) to make sure the coordinates are complitely passed the linesegment
-			sub ecx, ebx
-			mov ebx, [esp]
-			imul ecx, ebx 
-			
-			cmp edx, ecx
-			je hitSide
-			jmp negVelocityYBox
-			
 		hitSide:
 			cmp [Ball_VX], 0
 			jl hitRight										; The differentiation is not needed
 			;hitLeft
-			jmp negVelocityXBox
+			jmp negVelocityX
 			hitRight:
-			jmp negVelocityXBox
+			jmp negVelocityX
 			; From here on it intersects with top 
 			
-		jmp return ; useless
+		ret ; useless
 	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
-	negVelocityYBox:
-	pop eax
-	pop eax
-	jmp negVelocityY
-	negVelocityXBox:
-	pop eax
-	pop eax
-	jmp negVelocityX
-	
+		
 	negVelocityY:
 		neg [Ball_VY]   		; Reverse the vertical velocity of the ball
-		jmp return
+		ret
 	negVelocityX:
 		neg [Ball_VX]           ; Reverses the horizontal velocity of the ball
-		jmp return
+		ret
 	endMoveBall:
-		jmp return							; Needed otherwise go trough the rest of the procedure
+		ret							; Needed otherwise go trough the rest of the procedure
 	gameOver:
 		call terminateProcess			; pop pop is needed if not terminate in future
 	return:
@@ -351,6 +313,130 @@ PROC moveBall
 	ret
 ENDP moveBall
 
+PROC ccw
+	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@Y1:dword, @@X2:dword, @@Y2:dword
+	USES	ebx, ecx, edx    ; not eax otherwise it will return the original value but not the value intended to be returned
+	
+	mov eax, [@@Y2]
+	sub eax, [@@Y0]
+	mov ebx, [@@X1]
+	sub ebx, [@@X0]
+	imul eax, ebx
+	push eax
+	
+	mov eax, [@@Y1]
+	sub eax, [@@Y0]
+	mov ebx, [@@X2]
+	sub ebx, [@@X0]
+	imul eax, ebx
+	pop ebx 
+	
+	sub ebx, eax 
+	
+	cmp ebx, 0
+	jg true
+	mov eax, 0h
+	ret
+	true:
+	mov eax, 1h
+	ret
+ENDP ccw
+
+PROC intersect
+	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword
+			; A = index 0 , B = index 1, C = index 2, D = index 3
+	; Y0 is used her for point B but as it is for block it will be the same as for point B (remember we only check for intersect with horizontal lines) 
+	;following lines are debug 
+	;mov ebx, [@@X0]
+	;mov ecx, [@@X1]
+	;mov edx, [@@Y0]
+	;mov eax,0
+	;div eax
+	
+	mov ebx, [Ball_VX]
+	mov eax, 8
+	imul ebx, eax
+	mov eax, [Ball_X]
+	sub eax, ebx
+	
+	mov ecx, [Ball_VY]
+	mov ebx, 8
+	imul ecx, ebx
+	mov ebx, [Ball_Y]
+	sub ebx, ecx 							;C ball position at time - 1
+																	; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	
+	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], eax, ebx
+	push eax
+	
+	
+	
+
+	
+	mov ebx, [Ball_VX]
+	mov eax, 8
+	imul ebx, eax
+	mov ecx, [Ball_X]
+	add ecx, ebx
+	
+	mov eax, [Ball_VY]
+	mov ebx, 8
+	imul eax, ebx
+	mov edx, [Ball_Y]
+	add edx, eax 							;C ball position at time - 1
+														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	
+	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], ecx, edx
+	push eax
+	
+	push ebx
+	mov ebx, [Ball_VX]
+	mov eax, 8
+	imul ebx, eax
+	mov eax, [Ball_X]
+	sub eax, ebx
+	
+	pop ebx
+	
+	call ccw, [@@X0] [@@Y0], eax, ebx, ecx, edx	
+	push eax
+	
+	
+	push ebx
+	
+	mov ebx, [Ball_VX]
+	mov eax, 8
+	imul ebx, eax
+	mov eax, [Ball_X]
+	sub eax, ebx
+	
+	pop ebx
+														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	
+	
+	call ccw, [@@X1], [@@Y0], eax, ebx, ecx, edx
+	
+	pop ebx																
+	
+	
+	cmp eax, ebx
+	
+	je noIntersectPop
+	
+	pop eax
+	pop ebx
+	cmp eax, ebx
+	je noIntersect
+	mov eax, 1h
+	ret
+	noIntersectPop:
+	pop eax
+	pop ebx
+	noIntersect:
+	mov eax, 0h
+	ret
+	
+ENDP intersect
 
 PROC movePaddle					;Compute movement of the paddles
 		
