@@ -108,13 +108,14 @@ PROC drawBall
 ENDP drawBall
 
 PROC drawPaddle
-		ARG @@col:word
+		ARG @@Brick_Array:dword, @@col:word
 		USES eax, ebx, ecx
 		
-		mov ecx, 0
+		mov esi, [@@Brick_Array]
+		xor ecx, ecx
 		
-		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]    ; x-coordinate Paddle
-        mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate Paddle
+		mov eax, [esi]    ; x-coordinate Paddle
+        mov ebx, [esi + Brick_Array_Columns * 4]    ; y-coordinate Paddle
 		
 		call drawRectangle, eax, ebx, [Paddle_Width], [Paddle_Height], [@@col]
 
@@ -183,6 +184,8 @@ PROC moveBall
 		
 ; Collision with bricks and paddle is done with AABB
 	
+	mov edi, offset Brick_Visibility
+	
 	paddleColision:
 		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once 
 		mov ebx, [Paddle_Width]
@@ -231,14 +234,21 @@ PROC moveBall
 		 												
 		jg endMoveBall  										;if there's no collision exit collision with block (jump if greater)
 		
+		mov eax, [edi + ecx * 4]
+		cmp eax, 0
+		je endMoveBall
 		
 		; de twee volgende lijnen laten het crashen
 		push edx							;Stores Brick_Height
 		push ebx							;Stores Brick_Width
 		
+		cmp ecx, 0
+		je paddle
 		
+		call updateBrick, offset Brick_Array, offset Brick_Array_Color, offset Brick_Visibility, ecx
+		
+		paddle:
 		; Check where the ball hits the top of the blok
-		
 		
 		; mov eax, [Ball_Size]
 		; mov ebx, 02h		
@@ -261,6 +271,7 @@ PROC moveBall
 			; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
 			; If s1 > 0 and S1 == s2 --> no intersect
 			
+		
 			call intersect, eax, ebx, edx
 			cmp eax, 0
 			je hitSide
@@ -315,7 +326,7 @@ ENDP moveBall
 
 PROC ccw
 	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@Y1:dword, @@X2:dword, @@Y2:dword
-	USES	ebx, ecx, edx    ; not eax otherwise it will return the original value but not the value intended to be returned
+	USES	eax, ebx, ecx, edx    ; not eax otherwise it will return the original value but not the value intended to be returned
 	
 	mov eax, [@@Y2]
 	sub eax, [@@Y0]
@@ -344,6 +355,7 @@ ENDP ccw
 
 PROC intersect
 	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword
+	USES eax, ebx, ecx, edx
 			; A = index 0 , B = index 1, C = index 2, D = index 3
 	; Y0 is used her for point B but as it is for block it will be the same as for point B (remember we only check for intersect with horizontal lines) 
 	;following lines are debug 
@@ -368,10 +380,6 @@ PROC intersect
 	
 	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], eax, ebx
 	push eax
-	
-	
-	
-
 	
 	mov ebx, [Ball_VX]
 	mov eax, 8
@@ -438,8 +446,44 @@ PROC intersect
 	
 ENDP intersect
 
-PROC movePaddle					;Compute movement of the paddles
+PROC updateBrick
+	ARG @@Brick_Array:dword, @@Brick_Array_Color:dword, @@Brick_Visibility:dword, @@index:dword
+	USES eax, ebx, ecx, edx, esi, edi
+	
+	mov ecx, [@@index]
+	cmp ecx, 0
+	jne update
+	
+	ret
+	
+	update:
+		mov esi, [@@Brick_Array]
+		mov edi, [@@Brick_Array_Color]
 		
+		
+		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]
+		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
+		sub [edi + ecx * 2], 1
+		mov dx, [edi + ecx * 2]
+		
+		cmp dx, 0
+		jge color
+		
+		mov esi, [@@Brick_Visibility]
+		mov [esi + ecx * 4], 0
+		
+		color: 
+			
+			call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx
+
+		ret
+
+ENDP updateBrick
+
+PROC movePaddle					;Compute movement of the paddles
+	ARG @@Brick_Array:dword	
+	
+	mov esi, [@@Brick_Array]
 ;       Paddle movement
 	checkPaddleMovement:
 		mov ah, 01h
@@ -499,9 +543,11 @@ ENDP movePaddle
 
 ; Draws the differen levels of the bricks
 PROC drawBricks
+	ARG @@Brick_Array:dword, @@Brick_Array_Color:dword
     USES eax, ebx, ecx, edx, edi
     
-	mov edi, OFFSET Brick_Array_Color
+	mov esi, [@@Brick_Array]
+	mov edi, [@@Brick_Array_Color]
 	mov ecx, 1
     
     brickloop:
@@ -509,8 +555,7 @@ PROC drawBricks
         mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]    ; x-coordinate
         mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate 
 		mov dx, [edi + ecx * 2]     							; color
-        
-	
+		
         call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx
         
 		inc ecx
@@ -567,10 +612,8 @@ PROC main
     call setVideoMode, 13h
 
     ; Use the variables from DATASEG as arguments
-	
-	mov esi, offset Brick_Array
 		
-	call drawBricks, 25, 7	; Width and Height as arguments
+	call drawBricks, offset Brick_Array, offset Brick_Array_Color	; Width and Height as arguments
 
 	checkTime:                      			;time checking loop
 		; mov ah, 01h
@@ -591,14 +634,14 @@ PROC main
 		;If it reaches this point, it's because the time has passed (more than 1 100th of a second (clock resolution))
 
 		mov [Last_Time], dl              		;update time
-
+		
 		call drawBall, [Black]		;remove the ball
 		call moveBall               ;move the ball
 		call drawBall, [White]      ;draw the ball
 
-		call drawPaddle, [Black]	;remove the paddle			
-		call movePaddle            	;move the paddles (check for pressing of keys)
-		call drawPaddle, [White]    ;draw the paddles with the updated positions
+		call drawPaddle,offset Brick_Array, [Black] 	;remove the paddle			
+		call movePaddle, offset Brick_Array            	;move the paddles (check for pressing of keys)
+		call drawPaddle,offset Brick_Array, [White]     ;draw the paddles with the updated positions
 		
 		
 		
@@ -657,6 +700,8 @@ DATASEG
 						dd 180, 	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 						21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 			34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 			47, 47, 47, 47, 47, 47, 47, 47, 47, 47			;y-coordinate bricks (first column is for Paddle_Y)
 				
 	Brick_Array_Color	dw 15, 		15, 15, 15, 15, 15, 15, 15, 15, 15, 15,				2, 2, 2, 2, 2, 2, 2, 2, 2, 2,						3, 3, 3, 3, 3, 3, 3, 3, 3, 3,						4, 4, 4, 4, 4, 4, 4, 4, 4, 4					;health and color
+	
+	Brick_Visibility	dd 1,		1, 1, 1, 1, 1, 1, 1, 1, 1, 1,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1					;interactablility of the bricks (1 = interactable and 0 = not interactable)
 	
 	Brick_Width dd 25
 	Brick_Height dd 7
