@@ -253,7 +253,7 @@ PROC moveBall
 		; mov eax, [Ball_Size]
 		; mov ebx, 02h		
 		; xor edx, edx
-		; div ebx 				;Store in eax Ball_Size/2
+		; div ebx 				;Store in eax Ball_Size
 		
 		;we assume that it is not possible to hit a side that point in the direction of V
 		; (so if VY < 0 then can't hit the top side) 	
@@ -272,9 +272,20 @@ PROC moveBall
 			; If s1 > 0 and S1 == s2 --> no intersect
 			
 		
-			call intersect, eax, ebx, edx
+			call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
+			cmp eax, 1
+			je hitTop
+			cmp [Ball_VX], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
+			jg posVX
+			call intersect, eax, ebx, edx, 2, 2				; offsetX = 0 offsetY = 2 (right bottom of the ball)			
 			cmp eax, 0
 			je hitSide
+			jmp hitTop
+			posVX:
+			call intersect, eax, ebx, edx, 0, 2				; offsetX = 2 offsetY = 2 (left bottom of the ball)
+			cmp eax, 0
+			je hitSide
+			hitTop:
 			; From here on it intersects with top 
 			jmp negVelocityY
 		
@@ -286,9 +297,20 @@ PROC moveBall
 		; If s1 > 0 and S1 == s2 --> no intersect
 			pop ecx
 			add ebx, ecx	
-			call intersect, eax, ebx, edx
+			call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
+			cmp eax, 1
+			je hitBottom
+			cmp [Ball_VX], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
+			jg negVX
+			call intersect, eax, ebx, edx, 0, 0				; offsetX = 0 offsetY = 0 (left top of the ball)			
 			cmp eax, 0
-			jl hitSide
+			je hitSide
+			jmp hitBottom
+			negVX:
+			call intersect, eax, ebx, edx, 2, 0				; offsetX = 2 offsetY = 0 (right top of the ball)
+			cmp eax, 0
+			je hitSide
+			hitBottom:
 			; From here on it intersects with top 
 			jmp negVelocityY
 		
@@ -354,7 +376,7 @@ PROC ccw
 ENDP ccw
 
 PROC intersect
-	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword
+	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@offsetX: dword, @@offsetY: dword
 	USES eax, ebx, ecx, edx
 			; A = index 0 , B = index 1, C = index 2, D = index 3
 	; Y0 is used her for point B but as it is for block it will be the same as for point B (remember we only check for intersect with horizontal lines) 
@@ -370,21 +392,31 @@ PROC intersect
 	imul ebx, eax
 	mov eax, [Ball_X]
 	sub eax, ebx
+	mov ebx, [@@offsetX]
+	imul ebx, [Ball_Size]
+	add eax, ebx
 	
 	mov ecx, [Ball_VY]
 	mov ebx, 8
 	imul ecx, ebx
 	mov ebx, [Ball_Y]
 	sub ebx, ecx 							;C ball position at time - 1
-																	; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	mov ecx, [@@offsetY]
+	imul ecx, [Ball_Size]
+	add ebx, ecx																; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
 	
 	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], eax, ebx
 	push eax
+	
+	push ebx
 	
 	mov ebx, [Ball_VX]
 	mov eax, 8
 	imul ebx, eax
 	mov ecx, [Ball_X]
+	add ecx, ebx
+	mov ebx, [@@offsetX]
+	imul ebx, [Ball_Size]
 	add ecx, ebx
 	
 	mov eax, [Ball_VY]
@@ -393,6 +425,11 @@ PROC intersect
 	mov edx, [Ball_Y]
 	add edx, eax 							;C ball position at time - 1
 														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	mov ebx, [@@offsetY]
+	imul ebx, [Ball_Size]
+	add edx, ebx
+	
+	pop ebx
 	
 	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], ecx, edx
 	push eax
@@ -403,7 +440,9 @@ PROC intersect
 	imul ebx, eax
 	mov eax, [Ball_X]
 	sub eax, ebx
-	
+	mov ebx, [@@offsetX]
+	imul ebx, [Ball_Size]
+	add eax, ebx
 	pop ebx
 	
 	call ccw, [@@X0] [@@Y0], eax, ebx, ecx, edx	
@@ -417,7 +456,9 @@ PROC intersect
 	imul ebx, eax
 	mov eax, [Ball_X]
 	sub eax, ebx
-	
+	imul ebx, [Ball_Size]
+	add eax, ebx
+	pop ebx
 	pop ebx
 														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
 	
