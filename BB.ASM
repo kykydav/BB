@@ -491,31 +491,31 @@ PROC updateBrick
 	ARG @@Brick_Array:dword, @@Brick_Array_Color:dword, @@Brick_Visibility:dword, @@index:dword
 	USES eax, ebx, ecx, edx, esi, edi
 	
-	mov ecx, [@@index]
-	cmp ecx, 0
-	jne update
+	mov ecx, [@@index]		; Moving the index of the brick that needs to be updated
+	cmp ecx, 0				; Check to see if the paddle is hit to skip the update procedure
+	jne update				; If ecx is not equal to zero, then jump to update
 	
 	ret
 	
+	; Brick update
 	update:
-		mov esi, [@@Brick_Array]
-		mov edi, [@@Brick_Array_Color]
+		mov esi, [@@Brick_Array]			; Initialize the Brick_Array offset into esi
+		mov edi, [@@Brick_Array_Color]		; Initialize the Brick_Array_Color offset into edi
 		
 		
-		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]
-		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]
-		sub [edi + ecx * 2], 1
-		mov dx, [edi + ecx * 2]
+		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]		; Initialize the x-coordinate of the brick into eax
+		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]		; Initialize the y-coordinate of the brick into ebx
+		sub [edi + ecx * 2], 1										; Subtract 1 from the color index of the bricks to show damage
+		mov dx, [edi + ecx * 2]										; Initialize the color of the brick into dx
+				
+		cmp dx, 0		; Check to if the brick has a black color
+		jg draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
 		
-		cmp dx, 0
-		jge color
+		mov esi, [@@Brick_Visibility]		; Initialize the Brick_Visibility offset into esi
+		mov [esi + ecx * 4], 0				; Set the brick visibility to zero, so the brick is not interactable
 		
-		mov esi, [@@Brick_Visibility]
-		mov [esi + ecx * 4], 0
-		
-		color: 
-			
-			call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx
+		draw: 
+			call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx		; Drawning the brick in the new color
 
 		ret
 
@@ -608,11 +608,22 @@ PROC drawBricks
 
 ENDP drawBricks
 
+PROC GUI
+	USES eax, edx
+	
+	call setVideoMode, 03h
+	
+	mov ah, 09h
+	
+	mov edx, offset Levels		; Initialize the offset of the Levels string to edx
+	int 21h						; Print the string
+	
+	mov edx, offset Endless		; Initialize the offset of the Endless string to edx
+	int 21h						; Print the string
+	
+	mov edx, offset Exit		; Initialize the offset of the Exit string to edx
+	int 21h						; Print the string
 
-
-; ; Wait for a specific keystroke.
-PROC waitForSpecificKeystroke
-	USES eax
 	press_check:
 		mov ah, 01h
 		int 16h
@@ -621,15 +632,116 @@ PROC waitForSpecificKeystroke
 		mov ah, 00h
 		int 16h
 
-		cmp al, 27		;27 is ASCII code for 'ESC'
-		jne press_check
 
-	mov ax, 03h
-	int 10h
+		cmp al, 97				; 97 is ASCII code for 'a'
+		je levels				; Jump if equal to level
+		
+		cmp al, 65				; 65 is ASCII code for 'A'
+		je levels				; Jump if equal to level
+		
+		
+		cmp al, 98				; 98 is ASCII code for 'b'
+		je endless				; Jump if equal to endless
+		
+		cmp al, 66				; 66 is ASCII code for 'B'
+		je endless				; Jump if equal to endless
+		
+		
+		cmp al, 27				; 27 is ASCII code for 'ESC'
+		je exit					; Jump if equal to exit
+		
+		jmp press_check
 
-	ret
+	levels:
+		call setVideoMode, 03h
+		
+		mov ah, 09h
+		
+		mov edx, offset LevA		; Initialize the offset of the Level 1 string to edx
+		int 21h						; Print the string
+		
+		mov edx, offset LevB		; Initialize the offset of the Level 2 string to edx
+		int 21h						; Print the string
+		
+		mov edx, offset LevC		; Initialize the offset of the Level 3 string to edx
+		int 21h						; Print the string
+		
+		level_selected:
+			mov ah, 01h
+			int 16h
+			jz level_selected
 
-ENDP waitForSpecificKeystroke
+			mov ah, 00h
+			int 16h
+		
+			cmp al, 97				; 97 is ASCII code for 'a'
+			je lev1					; Jump if equal to level
+			
+			cmp al, 65				; 65 is ASCII code for 'A'
+			je lev1					; Jump if equal to level 
+			
+			
+			cmp al, 98				; 98 is ASCII code for 'b'
+			je lev2					; Jump if equal to endless
+			
+			cmp al, 66				; 66 is ASCII code for 'B'
+			je lev2					; Jump if equal to endless
+
+			
+			cmp al, 99				; 99 is ASCII code for 'c'
+			je lev3					; Jump if equal to endless
+			
+			cmp al, 67				; 67 is ASCII code for 'C'
+			je lev3					; Jump if equal to endless
+			
+			jmp level_selected
+		
+		lev1:
+			mov esi, offset Brick_Array
+			mov edi, offset Brick_Array_Color
+			
+			call setVideoMode, 13h
+		
+			ret
+			
+		lev2:
+			call terminateProcess
+			ret
+			
+		lev3:
+			call terminateProcess
+			ret
+	
+	endless:
+		call terminateProcess
+		ret
+	
+	exit:
+		call terminateProcess
+		ret
+
+ENDP GUI
+
+; Wait for a specific keystroke.
+; PROC waitForSpecificKeystroke
+	; USES eax
+	; press_check:
+		; mov ah, 01h
+		; int 16h
+		; jz press_check
+
+		; mov ah, 00h
+		; int 16h
+
+		; cmp al, 27		;27 is ASCII code for 'ESC'
+		; jne press_check
+
+	; mov ax, 03h
+	; int 10h
+
+	; ret
+
+; ENDP waitForSpecificKeystroke
 
 
 
@@ -650,11 +762,15 @@ PROC main
     push ds
     pop es
 
-    call setVideoMode, 13h
+    ; call setVideoMode, 13h
+
+	call GUI
 
     ; Use the variables from DATASEG as arguments
 		
-	call drawBricks, offset Brick_Array, offset Brick_Array_Color	; Width and Height as arguments
+	; call drawBricks, offset Brick_Array, offset Brick_Array_Color	; Width and Height as arguments
+	
+	call drawBricks, esi, edi
 
 	checkTime:                      			;time checking loop
 		; mov ah, 01h
@@ -680,9 +796,13 @@ PROC main
 		call moveBall               ;move the ball
 		call drawBall, [White]      ;draw the ball
 
-		call drawPaddle,offset Brick_Array, [Black] 	;remove the paddle			
-		call movePaddle, offset Brick_Array            	;move the paddles (check for pressing of keys)
-		call drawPaddle,offset Brick_Array, [White]     ;draw the paddles with the updated positions
+		; call drawPaddle, offset Brick_Array, [Black] 	;remove the paddle			
+		; call movePaddle, offset Brick_Array            	;move the paddles (check for pressing of keys)
+		; call drawPaddle, offset Brick_Array, [White]     ;draw the paddles with the updated positions
+		
+		call drawPaddle, esi, [Black] 	;remove the paddle			
+		call movePaddle, esi            	;move the paddles (check for pressing of keys)
+		call drawPaddle, esi, [White]     ;draw the paddles with the updated positions
 		
 		
 		
@@ -702,12 +822,22 @@ ENDP main
 
 ; -------------------------------------------------------------------
 DATASEG
+	; GUI strings
+	Levels db "Levels      Press A", 10, 10, '$'
+	Endless db "Endless     Press B", 10, 10, '$'
+	Exit db "Exit        Press ESC", '$'
+	
+	; GUI Levels selection
+	LevA db "Level 1      Press A", 10, 10, '$'
+	LevB db "Level 2      Press B", 10, 10, '$'
+	LevC db "Level 3      Press C", '$'
+
 	; Ball variables
 	Ball_X dd 160
 	Ball_Y dd 100
 	; The speed is constant in magnitude but they are not constants as they vary in sign.	
 	Ball_VX dd 05h               			;X (horizontal) velocity of the ball (5px)
-	Ball_VY dd -02           				;Y (vertical) velocity of the ball (2px)
+	Ball_VY dd -03           				;Y (vertical) velocity of the ball (2px)
 
 	; Ball constants
 	Ball_Size dd 3
@@ -740,7 +870,7 @@ DATASEG
 	Brick_Array 		dd 160, 	8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287, 		8, 39, 70, 101, 132, 163, 194, 225, 256, 287	;x-coordinate bricks (first column is for Paddle_X)
 						dd 180, 	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 						21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 			34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 			47, 47, 47, 47, 47, 47, 47, 47, 47, 47			;y-coordinate bricks (first column is for Paddle_Y)
 				
-	Brick_Array_Color	dw 15, 		15, 15, 15, 15, 15, 15, 15, 15, 15, 15,				2, 2, 2, 2, 2, 2, 2, 2, 2, 2,						3, 3, 3, 3, 3, 3, 3, 3, 3, 3,						4, 4, 4, 4, 4, 4, 4, 4, 4, 4					;health and color
+	Brick_Array_Color	dw 15, 		15, 15, 15, 15, 15, 15, 15, 15, 15, 15,				2, 2, 2, 2, 2, 2, 2, 2, 2, 2,						3, 3, 3, 3, 3, 3, 3, 3, 3, 3,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1					;health and color
 	
 	Brick_Visibility	dd 1,		1, 1, 1, 1, 1, 1, 1, 1, 1, 1,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1,						1, 1, 1, 1, 1, 1, 1, 1, 1, 1					;interactablility of the bricks (1 = interactable and 0 = not interactable)
 	
