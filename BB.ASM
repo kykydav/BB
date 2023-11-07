@@ -126,6 +126,8 @@ ENDP drawPaddle
 
 PROC moveBall
 	USES eax, ebx, ecx, edx
+	mov esi, Brick_Array			; Initialize the Brick_Array offset into esi
+
 	mov eax, [Ball_VX]
 	add [Ball_X], eax			; Move in x Direction
 
@@ -155,175 +157,135 @@ PROC moveBall
 	cmp [Ball_Y], eax
 	jge gameOver				; If the ball hits the lower border --> jump to gameOver
 
-; Brick Collision	
-; split in 10 columns
-	gridPanel:
-		; determine wich column should be checked
-		mov eax, [Ball_X]
-		add eax, [Ball_Size]	; calculate the x-coordinate of the center of the ball
-		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
-		mov ebx, 1Fh			; 31 px per column tting
-		xor edx, edx
-		div ebx                 ; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
-		
-		push eax				; store column index in stack
-		
-		mov eax, [Ball_Y]
-		add eax, [Ball_Size]	; calculate the y-coordinate of the center of the ball
-		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
-		mov ebx, 0Dh			; 13 px per column
-		xor edx, edx
-		div ebx					; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
-
-		pop ebx	
-
-		cmp [Ball_Y], 174
-		jle brickCollision
-		
-						; restores column index in ebx
-		
-; Collision with bricks and paddle is done with AABB
 	
-	mov edi, offset Brick_Visibility
+; split in 10 columns and check wher the ball is situated
 	
-	paddleColision:
-		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once 
-		mov ebx, [Paddle_Width]
-		mov edx, [Paddle_Height]
-		
-		jmp collisionCheck		; Jump to collisionCheck to check the collision with the paddle
-		
-	brickCollision:
-		mov ecx, 10
-		imul ecx
-		mov ecx, eax
-		add ecx, ebx
-		add ecx, 1
-		mov ebx, [Brick_Width]
-		mov edx, [Brick_Height]
-		
-		jmp collisionCheck
-		
-	collisionCheck:
-		
-		;condition 1 for collision	
-		mov eax, [Ball_X]			
-		add eax, [Ball_Size]		
-		add eax, [Ball_Size]									;maxX1 >= minX2
-		cmp eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]	;Ball_X + 2 * Ball_Size >= block_X
-		jl endMoveBall  										;if there's no collision exit collision with block (jump if less)
-		
-		;condition 2 for collision
-		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]	;initialize block_X in eax
-		add eax, ebx											;minX1 <= maxX2
-		cmp [Ball_X], eax										;Ball_X <= block_X + block_Width
-		 												
-		jg endMoveBall  										;if there's no collision exit collision with block (jump if greater)
-		
-		;condition 3 for collision
-		mov eax, [Ball_Y]			
-		add eax, [Ball_Size]		
-		add eax, [Ball_Size]									;maxY1 >= minY2
-		cmp eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]	;Ball_Y + 2 * Ball_Size >= block_Y
-		jl endMoveBall  										;if there's no collision exit collision with block (jump if less)
-		
-		;condition 4 for collision
-		mov eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]	;initialize block_Y in eax		
-		add eax, edx											;minY1 <= maxY2
-		cmp [Ball_Y], eax										;Ball_Y <= block_Y + block_Height
-		 												
-		jg endMoveBall  										;if there's no collision exit collision with block (jump if greater)
-		
-		mov eax, [edi + ecx * 4]
-		cmp eax, 0
-		je endMoveBall
-		
-		; de twee volgende lijnen laten het crashen
-		push edx							;Stores Brick_Height
-		push ebx							;Stores Brick_Width
-		
-		cmp ecx, 0
-		je paddle
-		
-		call updateBrick, offset Brick_Array, offset Brick_Array_Color, offset Brick_Visibility, ecx
-		
-		paddle:
-		; Check where the ball hits the top of the blok
-		
-		; mov eax, [Ball_Size]
-		; mov ebx, 02h		
-		; xor edx, edx
-		; div ebx 				;Store in eax Ball_Size
-		
-		;we assume that it is not possible to hit a side that point in the direction of V
-		; (so if VY < 0 then can't hit the top side) 	
-		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]			; Ax
-		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]			; AY, BY
-		pop edx
-		add edx, eax
-		
-		cmp [Ball_VY], 0
-		jl cannotHitTop
-			pop ecx				; otherwise there is an push too much !!!!
-			; cannot hit bottom 
-			; check if intersect with top if not it intersects with side
-			; s1 = (Ball_Y+2*Ball_Size - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X+Ball_Size - Block_X)
-			; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
-			; If s1 > 0 and S1 == s2 --> no intersect
-			
-		
-			call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
-			cmp eax, 1
-			je hitTop
-			cmp [Ball_VX], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
-			jg posVX
-			call intersect, eax, ebx, edx, 2, 2				; offsetX = 0 offsetY = 2 (right bottom of the ball)			
-			cmp eax, 0
-			je hitSide
-			jmp hitTop
-			posVX:
-			call intersect, eax, ebx, edx, 0, 2				; offsetX = 2 offsetY = 2 (left bottom of the ball)
-			cmp eax, 0
-			je hitSide
-			hitTop:
-			; From here on it intersects with top 
-			jmp negVelocityY
-		
-		cannotHitTop:
-		; cannot hit top so check if hits bottom if not hits side
-		; check if intersect with bottom if not it intersects with right
-		; s1 = (Ball_Y-2*Ball_Size - (Block_Y + Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth -(Block_Y + Block_Heigth))*((Ball_X+Ball_Size - Block_X)
-		; s2 = (Ball_Y - Ball_VY - (Block_Y+ Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth - (Block_Y + Block_Heigth))*((Ball_X - Ball_VX - Block_X)
+
+	cmp [Ball_Y], 174
+	jle brickCol
+	
+	mov ebx, 0
+	mov eax, 0
+	call collision, ebx, eax, 1		;if greater paddle colisision
+	cmp eax, 0
+	je endMoveBall
+	jmp checkSide
+	
+	
+	brickCol:
+	
+	; determine wich column should be checked
+	mov eax, [Ball_X]
+	add eax, [Ball_Size]	; calculate the x-coordinate of the center of the ball
+	sub eax, 5				; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
+	mov ebx, 1Fh			; 31 px per column tting
+	xor edx, edx
+	div ebx                 ; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
+	
+	push eax				; store column index in stack
+	
+	mov eax, [Ball_Y]
+	add eax, [Ball_Size]	; calculate the y-coordinate of the center of the ball
+	sub eax, 5				; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
+	mov ebx, 0Dh			; 13 px per column
+	xor edx, edx
+	div ebx					; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
+
+	pop ebx					; restores column index in ebx
+
+	
+	
+	call collision, ebx, eax,  2			; if lower or equal brickcolission
+	cmp eax, 0
+	je endMoveBall
+	checkSide:
+	; de twee volgende lijnen laten het crashen
+	
+	push edx							;Stores Brick_Height
+	push ebx							;Stores Brick_Width
+	
+	cmp ecx, 0
+	je paddle
+	
+	call updateBrick, offset Brick_Array, offset Brick_Array_Color, offset Brick_Visibility, ecx
+	
+	paddle:
+	; Check where the ball hits the top of the blok
+	
+	; mov eax, [Ball_Size]
+	; mov ebx, 02h		
+	; xor edx, edx
+	; div ebx 				;Store in eax Ball_Size
+	
+	;we assume that it is not possible to hit a side that point in the direction of V
+	; (so if VY < 0 then can't hit the top side) 	
+	mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]			; Ax
+	mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]			; AY, BY
+	pop edx
+	add edx, eax
+	
+	cmp [Ball_VY], 0
+	jl cannotHitTop
+		pop ecx				; otherwise there is an push too much !!!!
+		; cannot hit bottom 
+		; check if intersect with top if not it intersects with side
+		; s1 = (Ball_Y+2*Ball_Size - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X+Ball_Size - Block_X)
+		; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
 		; If s1 > 0 and S1 == s2 --> no intersect
-			pop ecx
-			add ebx, ecx	
-			call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
-			cmp eax, 1
-			je hitBottom
-			cmp [Ball_VX], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
-			jg negVX
-			call intersect, eax, ebx, edx, 0, 0				; offsetX = 0 offsetY = 0 (left top of the ball)			
-			cmp eax, 0
-			je hitSide
-			jmp hitBottom
-			negVX:
-			call intersect, eax, ebx, edx, 2, 0				; offsetX = 2 offsetY = 0 (right top of the ball)
-			cmp eax, 0
-			je hitSide
-			hitBottom:
-			; From here on it intersects with top 
-			jmp negVelocityY
 		
-		hitSide:
-			cmp [Ball_VX], 0
-			jl hitRight										; The differentiation is not needed
-			;hitLeft
-			jmp negVelocityX
-			hitRight:
-			jmp negVelocityX
-			; From here on it intersects with top 
-			
-		ret ; useless
+	
+		call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
+		cmp eax, 1
+		je hitTop
+		cmp [Ball_VX], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
+		jg posVX
+		call intersect, eax, ebx, edx, 2, 2				; offsetX = 0 offsetY = 2 (right bottom of the ball)			
+		cmp eax, 0
+		je hitSide
+		jmp hitTop
+		posVX:
+		call intersect, eax, ebx, edx, 0, 2				; offsetX = 2 offsetY = 2 (left bottom of the ball)
+		cmp eax, 0
+		je hitSide
+		hitTop:
+		; From here on it intersects with top 
+		jmp negVelocityY
+	
+	cannotHitTop:
+	; cannot hit top so check if hits bottom if not hits side
+	; check if intersect with bottom if not it intersects with right
+	; s1 = (Ball_Y-2*Ball_Size - (Block_Y + Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth -(Block_Y + Block_Heigth))*((Ball_X+Ball_Size - Block_X)
+	; s2 = (Ball_Y - Ball_VY - (Block_Y+ Block_Heigth))*(Block_X+Block_Width - Block_X) - (Block_Y + Block_Heigth - (Block_Y + Block_Heigth))*((Ball_X - Ball_VX - Block_X)
+	; If s1 > 0 and S1 == s2 --> no intersect
+		pop ecx
+		add ebx, ecx	
+		call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
+		cmp eax, 1
+		je hitBottom
+		cmp [Ball_VX], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
+		jg negVX
+		call intersect, eax, ebx, edx, 0, 0				; offsetX = 0 offsetY = 0 (left top of the ball)			
+		cmp eax, 0
+		je hitSide
+		jmp hitBottom
+		negVX:
+		call intersect, eax, ebx, edx, 2, 0				; offsetX = 2 offsetY = 0 (right top of the ball)
+		cmp eax, 0
+		je hitSide
+		hitBottom:
+		; From here on it intersects with top 
+		jmp negVelocityY
+	
+	hitSide:
+		cmp [Ball_VX], 0
+		jl hitRight										; The differentiation is not needed
+		;hitLeft
+		jmp negVelocityX
+		hitRight:
+		jmp negVelocityX
+		; From here on it intersects with top 
+		
+	;ret ; useless
 	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
 		
 	negVelocityY:
@@ -345,6 +307,79 @@ PROC moveBall
 	;return2:
 	ret
 ENDP moveBall
+
+PROC collision
+	ARG @@column: dword, @@row:dword, @@type: byte
+mov esi, offset Brick_Array
+mov edi, offset Brick_Visibility
+
+;Brick Collision	
+	cmp [@@type], 2
+	je brickCollision
+						
+		
+; Collision with bricks and paddle is done with AABB
+	
+	;paddleColision:
+		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once ; is it not 0 the column in matrix
+		mov ebx, [Paddle_Width]
+		mov edx, [Paddle_Height]
+		
+		jmp collisionCheck		; Jump to collisionCheck to check the collision with the paddle
+		
+	brickCollision:
+		mov eax, [@@row]
+		mov ebx, [@@column]
+		
+		mov ecx, 10
+		imul ecx
+		mov ecx, eax
+		add ecx, ebx
+		add ecx, 1
+		mov ebx, [Brick_Width]
+		mov edx, [Brick_Height]
+		
+		;jmp collisionCheck
+		
+	collisionCheck:
+		
+		;condition 1 for collision	
+		mov eax, [Ball_X]			
+		add eax, [Ball_Size]		
+		add eax, [Ball_Size]									;maxX1 >= minX2
+		cmp eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]	;Ball_X + 2 * Ball_Size >= block_X
+		jl noCollision  										;if there's no collision exit collision with block (jump if less)
+		
+		;condition 2 for collision
+		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]	;initialize block_X in eax
+		add eax, ebx											;minX1 <= maxX2
+		cmp [Ball_X], eax										;Ball_X <= block_X + block_Width
+		 												
+		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
+		
+		;condition 3 for collision
+		mov eax, [Ball_Y]			
+		add eax, [Ball_Size]		
+		add eax, [Ball_Size]									;maxY1 >= minY2
+		cmp eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]	;Ball_Y + 2 * Ball_Size >= block_Y
+		jl noCollision  										;if there's no collision exit collision with block (jump if less)
+		
+		;condition 4 for collision
+		mov eax, [esi + (1 * Brick_Array_Columns + ecx) * 4]	;initialize block_Y in eax		
+		add eax, edx											;minY1 <= maxY2
+		cmp [Ball_Y], eax										;Ball_Y <= block_Y + block_Height
+		 												
+		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
+		
+		mov eax, [edi + ecx * 4]								; visibility (paddle already dead
+		cmp eax, 0
+		je noCollision
+		mov eax, 1
+		ret
+		noCollision:
+		mov eax, 0
+		ret
+ENDP collision
 
 PROC ccw
 	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@Y1:dword, @@X2:dword, @@Y2:dword
