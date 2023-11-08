@@ -189,22 +189,18 @@ PROC moveBall
 	paddle:
 	; Check where the ball hits the top of the blok
 	
-	; mov eax, [Ball_Size]
-	; mov ebx, 02h		
-	; xor edx, edx
-	; div ebx 				;Store in eax Ball_Size
 	
 	;we assume that it is not possible to hit a side that point in the direction of V
 	; (so if VY < 0 then can't hit the top side) 	
 	mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]			; Ax
-	mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]			; AY, BY
+	mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]			; AY, BY 
 	pop edx
-	add edx, eax
+	add edx, eax													; BX those ar the point A and B in intersect method (or these represent the block border)
 	
 	cmp [Ball_VY], 0
 	jl cannotHitTop
-		pop ecx				; otherwise there is an push too much !!!!
-		; cannot hit bottom 
+	; cannot hit bottom:
+		pop ecx				; otherwise there is an push too much and Instruction Pointer (IP) is not correct !!!!
 		; check if intersect with top if not it intersects with side
 		; s1 = (Ball_Y+2*Ball_Size - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X+Ball_Size - Block_X)
 		; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
