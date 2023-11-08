@@ -125,9 +125,10 @@ ENDP drawPaddle
 
 
 PROC moveBall
+	; esi equals to Brick_Array offset
+	; edi equals to Brick_Array_Color offset
 	USES eax, ebx, ecx, edx
-	mov esi, Brick_Array			; Initialize the Brick_Array offset into esi
-
+	
 	mov eax, [Ball_VX]
 	add [Ball_X], eax			; Move in x Direction
 
@@ -207,7 +208,7 @@ PROC moveBall
 	cmp ecx, 0
 	je paddle
 	
-	call updateBrick, offset Brick_Array, offset Brick_Array_Color, offset Brick_Visibility, ecx
+	call updateBrick
 	
 	paddle:
 	; Check where the ball hits the top of the blok
@@ -310,15 +311,13 @@ ENDP moveBall
 
 PROC collision
 	ARG @@column: dword, @@row:dword, @@type: byte
-mov esi, offset Brick_Array
-mov edi, offset Brick_Visibility
 
-;Brick Collision	
-	cmp [@@type], 2
-	je brickCollision
+	;Brick Collision	
+		cmp [@@type], 2
+		je brickCollision
 						
 		
-; Collision with bricks and paddle is done with AABB
+	; Collision with bricks and paddle is done with AABB
 	
 	;paddleColision:
 		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once ; is it not 0 the column in matrix
@@ -371,7 +370,14 @@ mov edi, offset Brick_Visibility
 		 												
 		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
 		
-		mov eax, [edi + ecx * 4]								; visibility (paddle already dead
+		push edi
+
+		mov edi, offset Brick_Visibility
+		
+		mov eax, [edi + ecx * 4]								; visibility (paddle already dead)
+		
+		pop edi
+		
 		cmp eax, 0
 		je noCollision
 		mov eax, 1
@@ -523,36 +529,33 @@ PROC intersect
 ENDP intersect
 
 PROC updateBrick
-	ARG @@Brick_Array:dword, @@Brick_Array_Color:dword, @@Brick_Visibility:dword, @@index:dword
-	USES eax, ebx, ecx, edx, esi, edi
-	
-	mov ecx, [@@index]		; Moving the index of the brick that needs to be updated
-	cmp ecx, 0				; Check to see if the paddle is hit to skip the update procedure
-	jne update				; If ecx is not equal to zero, then jump to update
-	
-	ret
-	
-	; Brick update
-	update:
-		mov esi, [@@Brick_Array]			; Initialize the Brick_Array offset into esi
-		mov edi, [@@Brick_Array_Color]		; Initialize the Brick_Array_Color offset into edi
-		
-		
-		mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]		; Initialize the x-coordinate of the brick into eax
-		mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]		; Initialize the y-coordinate of the brick into ebx
-		sub [edi + ecx * 2], 1										; Subtract 1 from the color index of the bricks to show damage
-		mov dx, [edi + ecx * 2]										; Initialize the color of the brick into dx
-				
-		cmp dx, 0		; Check to if the brick has a black color
-		jg draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
-		
-		mov esi, [@@Brick_Visibility]		; Initialize the Brick_Visibility offset into esi
-		mov [esi + ecx * 4], 0				; Set the brick visibility to zero, so the brick is not interactable
-		
-		draw: 
-			call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx		; Drawning the brick in the new color
+	; ecx, esi and edi already defined before function call
+	; ecx equals the brick index
+	; esi equals Brick_Array offset
+	; edi equals Brick_Array_Color offset
+	USES eax, ebx, edx
 
-		ret
+	; Brick update
+		
+	mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]		; Initialize the x-coordinate of the brick into eax
+	mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]		; Initialize the y-coordinate of the brick into ebx
+	sub [edi + ecx * 2], 1										; Subtract 1 from the color index of the bricks to show damage
+	mov dx, [edi + ecx * 2]										; Initialize the color of the brick into dx
+			
+	cmp dx, 0		; Check to if the brick has a black color
+	jg draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
+	
+	push edi
+	
+	mov edi, offset Brick_Visibility		; Initialize the Brick_Visibility offset into esi
+	mov [edi + ecx * 4], 0				; Set the brick visibility to zero, so the brick is not interactable
+	
+	pop edi
+	
+	draw: 
+		call drawRectangle, eax, ebx, [Brick_Width], [Brick_Height], dx		; Drawning the brick in the new color
+
+	ret
 
 ENDP updateBrick
 
