@@ -129,10 +129,11 @@ PROC moveBall
 	; edi equals to Brick_Array_Color offset
 	USES eax, ebx, ecx, edx
 	
+	; Move ball according to the speed
 	mov eax, [Ball_VX]
 	add [Ball_X], eax			; Move in x Direction
 
-	; Those collision teste need to be adjusted to the size of the ball
+	; Check if it hits a border 
 	mov eax, [Ball_Size]
 	add eax, [Ball_Size]
 	cmp [Ball_X], eax
@@ -159,49 +160,24 @@ PROC moveBall
 	jge gameOver				; If the ball hits the lower border --> jump to gameOver
 
 	
-; split in 10 columns and check wher the ball is situated
 	
-
+	; Split the screen in 2 (uneven) to isolate the paddle collision and the brick collision 
+	; We do not do this in the collision function so that we can manually decide the collision type (used in paddle movement by example)
 	cmp [Ball_Y], 174
-	jle brickCol
+	jle brickCol							;if greater paddle collision, if lower or equal brickcolission
 	
-	mov ebx, 0
-	mov eax, 0
-	call collision, ebx, eax, 1		;if greater paddle colisision
-	cmp eax, 0
+	; Paddle collision
+	call collision, 1						
+	cmp [Colliding], 0
 	je endMoveBall
 	jmp checkSide
 	
-	
+	; 
 	brickCol:
-	
-	; determine wich column should be checked
-	mov eax, [Ball_X]
-	add eax, [Ball_Size]	; calculate the x-coordinate of the center of the ball
-	sub eax, 5				; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
-	mov ebx, 1Fh			; 31 px per column tting
-	xor edx, edx
-	div ebx                 ; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
-	
-	push eax				; store column index in stack
-	
-	mov eax, [Ball_Y]
-	add eax, [Ball_Size]	; calculate the y-coordinate of the center of the ball
-	sub eax, 5				; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
-	mov ebx, 0Dh			; 13 px per column
-	xor edx, edx
-	div ebx					; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
-
-	pop ebx					; restores column index in ebx
-
-	
-	
-	call collision, ebx, eax,  2			; if lower or equal brickcolission
-	cmp eax, 0
+	call collision, 2			
+	cmp [Colliding], 0
 	je endMoveBall
 	checkSide:
-	; de twee volgende lijnen laten het crashen
-	
 	push edx							;Stores Brick_Height
 	push ebx							;Stores Brick_Width
 	
@@ -310,16 +286,16 @@ PROC moveBall
 ENDP moveBall
 
 PROC collision
-	ARG @@column: dword, @@row:dword, @@type: byte
-
-	;Brick Collision	
-		cmp [@@type], 2
-		je brickCollision
-						
-		
-	; Collision with bricks and paddle is done with AABB
+	ARG @@type: byte
+	USES eax
+	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
+	;mov [Colliding], 0			Not needed as if ther is no collision it will be but to 0
 	
-	;paddleColision:
+	;Brick Collision	
+	cmp [@@type], 2
+	je brickCollision
+						
+	;paddleCollision:
 		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once ; is it not 0 the column in matrix
 		mov ebx, [Paddle_Width]
 		mov edx, [Paddle_Height]
@@ -327,21 +303,41 @@ PROC collision
 		jmp collisionCheck		; Jump to collisionCheck to check the collision with the paddle
 		
 	brickCollision:
-		mov eax, [@@row]
-		mov ebx, [@@column]
+	
+		; split in 10 columns and check wher the ball is situated
+		; determine wich column should be checked
+		mov eax, [Ball_X]
+		add eax, [Ball_Size]	; calculate the x-coordinate of the center of the ball
+		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
+		mov ebx, 1Fh			; 31 px per column tting
+		xor edx, edx
+		div ebx                 ; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
 		
+		push eax				; store column index in stack
+		
+		mov eax, [Ball_Y]
+		add eax, [Ball_Size]	; calculate the y-coordinate of the center of the ball
+		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
+		mov ebx, 0Dh			; 13 px per column
+		xor edx, edx
+		div ebx					; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
+
+		pop ebx					; restores column index in ebx
+			
+		;the goal here is to transform the row and colums information in 
+		;1 index (ecx) to acces the desired element in the matrix Brick_Array 	
 		mov ecx, 10
-		imul ecx
-		mov ecx, eax
-		add ecx, ebx
-		add ecx, 1
+		imul ecx				; multiply row index (eax) * 10 (10 elements per row)
+		mov ecx, eax			
+		add ecx, ebx			; add column index (ebx) 
+		add ecx, 1				
 		mov ebx, [Brick_Width]
 		mov edx, [Brick_Height]
 		
 		;jmp collisionCheck
 		
 	collisionCheck:
-		
+		; Collision with bricks and paddle is done with AABB (see more in the report)
 		;condition 1 for collision	
 		mov eax, [Ball_X]			
 		add eax, [Ball_Size]		
@@ -372,24 +368,26 @@ PROC collision
 		
 		push edi
 
-		mov edi, offset Brick_Visibility
+		mov edi, offset Brick_Visibility						; is Brick visibility not already in edi???
 		
-		mov eax, [edi + ecx * 4]								; visibility (paddle already dead)
-		
+		mov eax, [edi + ecx * 4]								
 		pop edi
 		
-		cmp eax, 0
+		cmp eax, 0												; Check the visibility (if the brick is already dead then there is no collision)
+		
 		je noCollision
-		mov eax, 1
+		mov [Colliding], 1										; Store the state in the collision bool
 		ret
 		noCollision:
-		mov eax, 0
+		mov [Colliding], 0
 		ret
 ENDP collision
 
 PROC ccw
 	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@Y1:dword, @@X2:dword, @@Y2:dword
-	USES	eax, ebx, ecx, edx    ; not eax otherwise it will return the original value but not the value intended to be returned
+	USES	ebx, ecx, edx    ; not eax otherwise it will return the original value but not the value intended to be returned
+	
+	; This function checks if 3 points are oriented clockwise or not. (Used in intersect function for more detail see report) 
 	
 	mov eax, [@@Y2]
 	sub eax, [@@Y0]
@@ -418,8 +416,11 @@ ENDP ccw
 
 PROC intersect
 	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@offsetX: dword, @@offsetY: dword
-	USES eax, ebx, ecx, edx
+	USES ebx, ecx, edx
 			; A = index 0 , B = index 1, C = index 2, D = index 3
+	
+	; This function uses the the (anti-)clockwise method to determine if there is intersection (see report for more information)
+	
 	; Y0 is used her for point B but as it is for block it will be the same as for point B (remember we only check for intersect with horizontal lines) 
 	;following lines are debug 
 	;mov ebx, [@@X0]
@@ -441,12 +442,12 @@ PROC intersect
 	mov ebx, 8
 	imul ecx, ebx
 	mov ebx, [Ball_Y]
-	sub ebx, ecx 							;C ball position at time - 1
+	sub ebx, ecx 																
 	mov ecx, [@@offsetY]
 	imul ecx, [Ball_Size]
 	add ebx, ecx																; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
-	
-	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], eax, ebx
+																				;we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], eax, ebx							; check clockwise brick horizontal border (top/bottom) and ball at position t+1 
 	push eax
 	
 	push ebx
@@ -458,14 +459,14 @@ PROC intersect
 	add ecx, ebx
 	mov ebx, [@@offsetX]
 	imul ebx, [Ball_Size]
-	add ecx, ebx
+	add ecx, ebx										;C ball position at time - 1
 	
 	mov eax, [Ball_VY]
 	mov ebx, 8
 	imul eax, ebx
-	mov edx, [Ball_Y]
-	add edx, eax 							;C ball position at time - 1
-														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	mov edx, [Ball_Y]		
+	add edx, eax 										;C ball position at time - 1
+														
 	mov ebx, [@@offsetY]
 	imul ebx, [Ball_Size]
 	add edx, ebx
@@ -561,7 +562,7 @@ ENDP updateBrick
 
 PROC movePaddle					;Compute movement of the paddles
 	ARG @@Brick_Array:dword	
-	
+	USES eax, ebx, ecx, edx
 	mov esi, [@@Brick_Array]
 ;       Paddle movement
 	checkPaddleMovement:
@@ -587,35 +588,72 @@ PROC movePaddle					;Compute movement of the paddles
 		
 		ret
 		
-		movePaddleLeft:
-			mov eax, [Paddle_V]
-			sub [esi], eax
-			
-			xor eax, eax
-			cmp [esi], eax
-			jl paddleRightOfBorder
-			jmp exitPaddleMovement
+	movePaddleLeft:
+		mov eax, [Paddle_V]
+		sub [esi], eax
+		
+		xor eax, eax						; faster than mov eax,0
+		cmp [esi], eax
+		jl paddleRightOfBorder
+		jmp checkPaddleCollisionLeft
 
-			paddleRightOfBorder:
-				mov [esi], eax
-				jmp exitPaddleMovement
+		paddleRightOfBorder:
+			mov [esi], eax
+			jmp checkPaddleCollisionLeft
 
-		movePaddleRight:
-			mov eax, [Paddle_V]
-			add [esi], eax
+	movePaddleRight:
+		mov eax, [Paddle_V]
+		add [esi], eax
 
-			mov eax, [Window_Width]				; has to change depending on how we draw paddle and testing
-			sub eax, [Paddle_Width]
-			cmp [esi], eax
-			jg paddleLeftOfBorder
-			jmp exitPaddleMovement
+		mov eax, [Window_Width]				; has to change depending on how we draw paddle and testing
+		sub eax, [Paddle_Width]
+		cmp [esi], eax
+		jg paddleLeftOfBorder
+		jmp checkPaddleCollisionRigth
 
-			paddleLeftOfBorder:
-				mov [esi], eax
-				jmp exitPaddleMovement
+		paddleLeftOfBorder:
+			mov [esi], eax
+			jmp checkPaddleCollisionRigth
 
+	; The paddle movement is horizontal so if there is collision her it must be sideways (but in the algorithm used for knowing what side it hit it cannot be determined)
+	; We check this collision to restrict the overlapping of the paddle over the ball as the paddle could jump over the ball making weired movement patterns
+	; Note that we need to know if there is already collision otherwise we will always teleport to the sides of the paddle. 
+	
+	checkPaddleCollisionLeft:				; if we move the paddle to the left there will be collision from the left or none at all
+	cmp [Colliding],1						; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
+	je exitPaddleMovement
+	call collision, 200, 200, 1				; check if the ball is colliding now (since the paddle movement)
+	cmp [Colliding], 0
+	je exitPaddleMovement					; if not exit
+	
+	mov ebx, [esi]							; [esi] = paddle_X
+	call drawBall, [Black]					;remove the ball
+	sub ebx, [Ball_Size]
+	sub ebx, [Ball_Size]					
+	mov [Ball_X], ebx						;move the ball to Paddle_X - 2*Ball_Size (Remember Ball_Size = radius of the ball)
+	call drawBall, [White]      			;draw the ball
+	jmp exitPaddleMovement
+	cmp [Ball_VX], 0						; check if the ball velocity needs to be changed
+	jl exitPaddleMovement
+	neg [Ball_VX]
+	ret
+	checkPaddleCollisionRigth:				; if we move the paddle to the rigth there will be collision from the rigth or none at all
+	cmp [Colliding],1						; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
+	je exitPaddleMovement
+	call collision, 0, 0, 1					; check if the ball is colliding now (since the paddle movement)
+	cmp [Colliding], 0
+	je exitPaddleMovement					; if not exit
+	
+	mov ebx, [esi]							; [esi] = paddle_X
+	call drawBall, [Black]					; remove the ball	
+	add ebx, [Paddle_Width]
+	mov [Ball_X], ebx						;move the ball to Paddle_X + Paddle_Width
+	call drawBall, [White]      			;draw the ball
+	cmp [Ball_VX], 0						; check if the ball velocity needs to be changed
+	jg exitPaddleMovement
+	neg [Ball_VX]
+	ret
 	exitPaddleMovement:
-
 		ret
 
 ENDP movePaddle
@@ -826,7 +864,7 @@ PROC main
 		cmp dl, [Last_Time]  					;is the current time equal to the previous one(Last_Time)?
 		je checkTime    		    			;if it is the same, check again
 
-		;If it reaches this point, it's because the time has passed (more than 1 100th of a second (clock resolution))
+		;If it reaches this point, it'sdddddd because the time has passed (more than 1 100th of a second (clock resolution))
 
 		mov [Last_Time], dl              		;update time
 		
@@ -841,7 +879,6 @@ PROC main
 		call drawPaddle, esi, [Black] 	;remove the paddle			
 		call movePaddle, esi            	;move the paddles (check for pressing of keys)
 		call drawPaddle, esi, [White]     ;draw the paddles with the updated positions
-		
 		
 		
 		jmp checkTime	;after everything checks time again
@@ -894,7 +931,7 @@ DATASEG
 	Window_Width dd 140h					; Window_Width(320px in hex)
 	Window_Heigth dd 0C8h					; Window_Heigth (200px in hex)
 	Exit_Game db 0							; Exiting Boolean
-
+	Colliding db 0							; Colliding Boolean
 	; colors
 	Black dw 0
 	White dw 15
