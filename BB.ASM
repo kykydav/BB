@@ -187,7 +187,7 @@ PROC moveBall
 	; pop esi
 	
 	je endMoveBall
-	jmp checkSide
+	jmp checkBorder
 	
 	
 	; 
@@ -195,9 +195,9 @@ PROC moveBall
 	
 	call collision, 2			
 	cmp [Colliding], 0
-	
 	je endMoveBall
-	checkSide:
+	
+	checkBorder:
 	push edx							;Stores Brick_Height
 	push ebx							;Stores Brick_Width
 	
@@ -212,15 +212,15 @@ PROC moveBall
 	
 	;we assume that it is not possible to hit a side that point in the direction of V
 	; (so if VY < 0 then can't hit the top side) 	
-	mov eax, [edi + Ball.x_Pos]			; Ax
-	mov ebx, [edi + Ball.y_Pos]			; AY, BY 
+	mov eax, [esi + ecx + Brick.x_Pos]			; Ax
+	mov ebx, [esi + ecx + Brick.y_Pos]			; AY, BY 
 	pop edx
 	add edx, eax													; BX those ar the point A and B in intersect method (or these represent the block border)
 	
 	cmp [edi + Ball.y_Vel], 0
 	jl cannotHitTop
 	; cannot hit bottom:
-		pop ecx				; otherwise there is an push too much and Instruction Pointer (IP) is not correct !!!!
+		pop ecx				; otherwise there is a push too much and Instruction Pointer (IP) is not correct !!!!
 		; check if intersect with top if not it intersects with side
 		; s1 = (Ball_Y+2*Ball_Size - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X+Ball_Size - Block_X)
 		; s2 = (Ball_Y - Ball_VY - Block_Y)*(Block_X+Block_Width - Block_X) - (Block_Y -Block_Y)*((Ball_X - Ball_VX - Block_X)
@@ -230,12 +230,15 @@ PROC moveBall
 		call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
 		cmp eax, 1
 		je hitTop
+		
 		cmp [edi + Ball.x_Vel], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
 		jg posVX
+		;posVY
 		call intersect, eax, ebx, edx, 2, 2				; offsetX = 0 offsetY = 2 (right bottom of the ball)			
 		cmp eax, 0
 		je short hitSide
 		jmp hitTop
+		
 		posVX:
 		call intersect, eax, ebx, edx, 0, 2				; offsetX = 2 offsetY = 2 (left bottom of the ball)
 		cmp eax, 0
@@ -252,15 +255,19 @@ PROC moveBall
 	; If s1 > 0 and S1 == s2 --> no intersect
 		pop ecx
 		add ebx, ecx	
+		
 		call intersect, eax, ebx, edx, 1, 1				; We check if the line trough the diagonal of the ball hits the top 
 		cmp eax, 1
 		je hitBottom
+		
 		cmp [edi + Ball.x_Vel], 0								;if not we need to check the sign of VX to determine what the following line is wich we need to verify (for more info look at the report
-		jg negVX
+		jl negVX
+		;posVX
 		call intersect, eax, ebx, edx, 0, 0				; offsetX = 0 offsetY = 0 (left top of the ball)			
 		cmp eax, 0
 		je hitSide
 		jmp hitBottom
+		
 		negVX:
 		call intersect, eax, ebx, edx, 2, 0				; offsetX = 2 offsetY = 0 (right top of the ball)
 		cmp eax, 0
@@ -278,9 +285,7 @@ PROC moveBall
 		jmp negVelocityX
 		; From here on it intersects with top 
 		
-	;ret ; useless
-	; is this needed as we have only one line --> Yes easier and actually you would have 2 lines the ret is important
-		
+	;ret ; useless	
 	negVelocityY:
 		neg [edi + Ball.y_Vel]   		; Reverse the vertical velocity of the ball
 		ret
@@ -305,7 +310,7 @@ PROC collision
 	ARG @@type: byte
 	USES eax
 	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
-	;mov [Colliding], 0			Not needed as if ther is no collision it will be but to 0
+	;mov [Colliding], 0			Not needed as if ther is no collision it will be put to 0
 	
 	;Brick Collision	
 	cmp [@@type], 2
@@ -376,8 +381,7 @@ PROC collision
 		;condition 2 for collision
 		mov eax, [esi + ecx + Brick.x_Pos]	;initialize block_X in eax
 		add eax, ebx											;minX1 <= maxX2
-		cmp [edi + Ball.x_Pos], eax										;Ball_X <= block_X + block_Width
-		 												
+		cmp [edi + Ball.x_Pos], eax										;Ball_X <= block_X + block_Width									
 		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
 		
 		;condition 3 for collision
@@ -390,8 +394,7 @@ PROC collision
 		;condition 4 for collision
 		mov eax, [esi + ecx + Brick.y_Pos]	;initialize block_Y in eax		
 		add eax, edx											;minY1 <= maxY2
-		cmp [edi + Ball.y_Pos], eax										;Ball_Y <= block_Y + block_Height
-		 												
+		cmp [edi + Ball.y_Pos], eax										;Ball_Y <= block_Y + block_Height								
 		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
 		
 		; push edi
@@ -419,15 +422,19 @@ PROC ccw
 	
 	mov eax, [@@Y2]
 	sub eax, [@@Y0]
+	
 	mov ebx, [@@X1]
 	sub ebx, [@@X0]
+	
 	imul eax, ebx
 	push eax
 	
 	mov eax, [@@Y1]
 	sub eax, [@@Y0]
+	
 	mov ebx, [@@X2]
 	sub ebx, [@@X0]
+	
 	imul eax, ebx
 	pop ebx 
 	
@@ -435,6 +442,7 @@ PROC ccw
 	
 	cmp ebx, 0
 	jg true
+	
 	mov eax, 0h
 	ret
 	true:
@@ -458,16 +466,16 @@ PROC intersect
 	;div eax
 	
 	mov ebx, [edi + Ball.x_Vel]
-	mov eax, 8
+	mov eax, 2
 	imul ebx, eax
 	mov eax, [edi + Ball.x_Pos]
 	sub eax, ebx
 	mov ebx, [@@offsetX]
 	imul ebx, [edi + Ball.Radius]
 	add eax, ebx
-	
+																				;C ball position at time - 1
 	mov ecx, [edi + Ball.y_Vel]
-	mov ebx, 8
+	mov ebx, 2
 	imul ecx, ebx
 	mov ebx, [edi + Ball.y_Pos]
 	sub ebx, ecx 																
@@ -475,73 +483,49 @@ PROC intersect
 	imul ecx, [edi + Ball.Radius]
 	add ebx, ecx																; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
 																				;we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	push eax
+	push ebx																	; when pushing the value in the stack, it is not erased
 	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], eax, ebx							; check clockwise brick horizontal border (top/bottom) and ball at position t+1 
 	push eax
-	
-	push ebx
-	
+		
 	mov ebx, [edi + Ball.x_Vel]
-	mov eax, 8
+	mov eax, 2
 	imul ebx, eax
 	mov ecx, [edi + Ball.x_Pos]
 	add ecx, ebx
 	mov ebx, [@@offsetX]
 	imul ebx, [edi + Ball.Radius]
-	add ecx, ebx										;C ball position at time - 1
+	add ecx, ebx																;C ball position at time + 1
 	
 	mov eax, [edi + Ball.y_Vel]
 	mov ebx, 8
 	imul eax, ebx
 	mov edx, [edi + Ball.y_Pos]		
-	add edx, eax 										;C ball position at time - 1
-														
+	add edx, eax 																					
 	mov ebx, [@@offsetY]
 	imul ebx, [edi + Ball.Radius]
 	add edx, ebx
 	
-	pop ebx
-	
 	call ccw, [@@X0] [@@Y0], [@@X1], [@@Y0], ecx, edx
-	push eax
-	
-	push ebx
-	mov ebx, [edi + Ball.x_Vel]
-	mov eax, 8
-	imul ebx, eax
-	mov eax, [edi + Ball.x_Pos]
-	sub eax, ebx
-	mov ebx, [@@offsetX]
-	imul ebx, [edi + Ball.Radius]
-	add eax, ebx
-	pop ebx
-	
-	call ccw, [@@X0] [@@Y0], eax, ebx, ecx, edx	
-	push eax
-	
-	
-	push ebx
-	
-	mov ebx, [edi + Ball.x_Vel]
-	mov eax, 8
-	imul ebx, eax
-	mov eax, [edi + Ball.x_Pos]
-	sub eax, ebx
-	imul ebx, [edi + Ball.Radius]
-	add eax, ebx
-	pop ebx
-	pop ebx
-														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
-	
-	
-	call ccw, [@@X1], [@@Y0], eax, ebx, ecx, edx
-	
-	pop ebx																
-	
-	
-	cmp eax, ebx
-	
+	pop ebx 				; pop eax from the first ccw into ebx
+	cmp eax, ebx			; if they have both the same orientation it does not intersect
 	je noIntersectPop
 	
+	pop ebx
+	pop eax
+	push eax
+		
+	call ccw, [@@X0] [@@Y0], eax, ebx, ecx, edx	
+	push eax
+	mov eax, [esp + 4]
+														; C ball position at time + 1 we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect
+	call ccw, [@@X1], [@@Y0], eax, ebx, ecx, edx
+	pop ebx																
+	
+	cmp eax, ebx
+	pop eax
+	je noIntersect
+	; intersect
 	pop eax
 	pop ebx
 	cmp eax, ebx
@@ -549,8 +533,8 @@ PROC intersect
 	mov eax, 1h
 	ret
 	noIntersectPop:
+	pop eax													; unpopped values
 	pop eax
-	pop ebx
 	noIntersect:
 	mov eax, 0h
 	ret
