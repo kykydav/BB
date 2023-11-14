@@ -159,7 +159,7 @@ PROC moveBall
 	sub eax, [edi + Ball.Radius]
 	sub eax, [edi + Ball.Radius]
 	sub eax, [edi + Ball.Radius]
-
+	sub eax, [edi + Ball.Radius]
 	cmp [edi + Ball.x_Pos], eax
 	jge negVelocityX			; If the ball hits right border, negate x velocity
 
@@ -640,14 +640,14 @@ PROC movePaddle					;Compute movement of the paddles
 	; Note that we need to know if there is already collision otherwise we will always teleport to the sides of the paddle. 
 	
 	checkPaddleCollisionLeft:						; if we move the paddle to the left there will be collision from the left or none at all
-	cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
-	je exitPaddleMovement
+	;cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
+	;je exitPaddleMovement
 	call collision, 1								; check if the ball is colliding now (since the paddle movement)
 	cmp [Colliding], 0
 	je exitPaddleMovement							; if not exit
 	
-	mov ebx, [esi + Brick.x_Pos]					; [esi] = paddle_X
 	call drawBall, [Black]							;remove the ball
+	mov ebx, [esi + Brick.x_Pos]					; [esi] = paddle_X
 	sub ebx, [edi + Ball.Radius]
 	sub ebx, [edi + Ball.Radius]					
 	mov [edi + Ball.x_Pos], ebx						;move the ball to Paddle_X - 2*Ball_Size (Remember Ball_Size = radius of the ball)
@@ -656,7 +656,7 @@ PROC movePaddle					;Compute movement of the paddles
 	cmp [edi + Ball.x_Vel], 0						; check if the ball velocity needs to be changed
 	jl exitPaddleMovement
 	neg [edi + Ball.x_Vel]
-	ret
+	jmp exitPaddleMovement
 	
 	checkPaddleCollisionRigth:						; if we move the paddle to the rigth there will be collision from the rigth or none at all
 	cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
@@ -665,15 +665,14 @@ PROC movePaddle					;Compute movement of the paddles
 	cmp [Colliding], 0
 	je exitPaddleMovement							; if not exit
 	
-	mov ebx, [esi + Brick.x_Pos]					; [esi] = paddle_X
 	call drawBall, [Black]							; remove the ball	
-	;add ebx, [esi + Brick.x_Vel]
+	mov ebx, [esi + Brick.x_Pos]					; [esi] = paddle_X
+	add ebx, [esi + Brick.Width]
 	mov [edi + Ball.x_Pos], ebx						;move the ball to Paddle_X + Paddle_Width
 	call drawBall, [White]      					;draw the ball
 	cmp [edi + Ball.x_Vel], 0						; check if the ball velocity needs to be changed
 	jg exitPaddleMovement
 	neg [edi + Ball.x_Vel]
-	ret
 	exitPaddleMovement:
 	ret
 
