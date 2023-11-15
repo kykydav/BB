@@ -640,16 +640,16 @@ PROC movePaddle					;Compute movement of the paddles
 	; Note that we need to know if there is already collision otherwise we will always teleport to the sides of the paddle. 
 	
 	checkPaddleCollisionLeft:						; if we move the paddle to the left there will be collision from the left or none at all
-	;cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
-	;je exitPaddleMovement
+	cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
+	je exitPaddleMovement
 	call collision, 1								; check if the ball is colliding now (since the paddle movement)
 	cmp [Colliding], 0
 	je exitPaddleMovement							; if not exit
-	
 	call drawBall, [Black]							;remove the ball
 	mov ebx, [esi + Brick.x_Pos]					; [esi] = paddle_X
 	sub ebx, [edi + Ball.Radius]
-	sub ebx, [edi + Ball.Radius]					
+	sub ebx, [edi + Ball.Radius]
+	
 	mov [edi + Ball.x_Pos], ebx						;move the ball to Paddle_X - 2*Ball_Size (Remember Ball_Size = radius of the ball)
 	call drawBall, [White]      					;draw the ball
 	jmp short exitPaddleMovement
