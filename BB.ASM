@@ -4,8 +4,8 @@
 ; TASM
 ;
 ; author:	David Kyan, Petrosyan Artyom
-; date:		19/10/2023
-; program:	Video mode 13h
+; date:		17/11/2023
+; program:	Brick Breaker game
 ; -------------------------------------------------------------------
 
 IDEAL
@@ -17,11 +17,6 @@ ASSUME cs:_TEXT,ds:FLAT,es:FLAT,fs:FLAT,gs:FLAT
 VMEMADR EQU 0A0000h	; video memory address
 SCRWIDTH EQU 320	; screen witdth
 SCRHEIGHT EQU 200	; screen height
-
-; Brick constants
-Brick_Array_Rows EQU 2
-Brick_Array_Columns EQU 41
-Brick_Array_Total EQU Brick_Array_Rows * Brick_Array_Columns
 	
 DATASIZE EQU 943 ;bytes of data in file	
 ; -------------------------------------------------------------------
@@ -80,76 +75,62 @@ PROC drawBall
 	ARG @@col:word
 	; USES eax, ebx, ecx, edx, edi
 
-	lea esi, [game_ball]
+	lea esi, [game_ball]			; Load effective adress of the game_ball array with the Ball struct into esi
 
-	mov eax, [esi + Ball.x_Pos]
-	add eax, 2
-	mov ebx, [esi + Ball.y_Pos]
+	mov eax, [esi + Ball.x_Pos]		; Initialize the x posiition of the ball into eax
+	mov ebx, [esi + Ball.y_Pos]		; Initialize the y position of the ball into ebx
 	mov ecx, [esi + Ball.Radius]
-	mov edx, ecx
+	mov edx, [esi + Ball.Radius]
+	add edx, [esi + Ball.Radius]
 
-	sub ecx, 1
-	add edx, 3
-
+	; Update the registers to draw the rest of the rectangles
 	drawball:
-		call drawRectangle, eax, ebx, ecx, edx, [@@col]
-
-		cmp ecx, 6
-		je done
-
-		sub eax, 1
+		call drawRectangle, eax, ebx, ecx, edx, [@@col]		; Call the drawRectangle procedure using the color as an argument
+		
+		cmp edx, [esi + Ball.Radius]	; Check to see if the ball is drawn
+		jle done						; Jump is lower or equal to done to end the procedure
+		
+		; Update the new values for the next rectangle to draw the ball
+		sub eax, 1		
 		add ebx, 1
 		add ecx, 2
 		sub edx, 2
 
-		jmp drawball
+		jmp drawball	; Jump to drawball until the ball is fully drawn
 
 	done:
-		;mov ah, 0ch
-		;mov ecx, [edi + Ball.x_Pos]
-		;mov edx, [edi + Ball.y_Pos]
-		;mov al, 2
-		;int 10h
 		ret
 
 ENDP drawBall
 
 PROC drawPaddle
-	ARG @@Brick_Array:dword, @@col:word
+	ARG @@col:word
 	USES eax, ebx, ecx, edx
-	
-	; push esi
-	
-	; mov esi, [@@Brick_Array]
-	; lea esi, [game_paddle]
-	xor ecx, ecx
 	
 	mov eax, [edi + Brick.x_Pos]    ; x-coordinate Paddle
 	mov ebx, [edi + Brick.y_Pos]    ; y-coordinate Paddle
-	; mov dx, [esi + Brick.Color]
+	mov ecx, [edi + Brick.Width]	; Width of the Paddle
+	mov edx, [edi + Brick.Height]	; Height of the Paddle
 	
-	call drawRectangle, eax, ebx, [edi + Brick.Width], [edi + Brick.Height], [@@col]
-	
-	; pop esi
+	call drawRectangle, eax, ebx, ecx, edx, [@@col]
 	
 	ret
 
 ENDP drawPaddle
 
-
 PROC moveBall
-	; esi equals to Brick_Array offset
-	; edi equals to Brick_Array_Color offset
+	; esi equals game_ball Array pointer
+	; edi equals the level_bricks Array pointer
 	USES eax, ebx, ecx, edx
 	
-	lea esi, [game_ball]
+	lea esi, [game_ball]	; Load effective adress of game_ball struct array to esi
 	
 	; Move ball according to the speed
 	mov eax, [esi + Ball.x_Vel]
-	add [esi + Ball.x_Pos], eax			; Move in x Direction
+	add [esi + Ball.x_Pos], eax			; Move in x Direction (x_Pos + x_Vel * timestep)
 	
 	mov eax, [esi + Ball.y_Vel]
-	add [esi + Ball.y_Pos], eax			; Move in y direction
+	add [esi + Ball.y_Pos], eax			; Move in y direction (y_Pos + y_Vel * timestep)
 
 	; Check if it hits a border 
 	mov eax, [esi + Ball.Radius]
@@ -166,7 +147,7 @@ PROC moveBall
 	cmp [esi + Ball.x_Pos], eax
 	jge negVelocityX					; If the ball hits right border, negate x velocity
 
-	cmp [esi + Ball.y_Pos], 00h
+	cmp [esi + Ball.y_Pos], 0
 	jle negVelocityY					; If the ball hits upper border, negate x velocity
 
 	mov eax, SCRHEIGHT
@@ -291,21 +272,19 @@ PROC moveBall
 	negVelocityY:
 		neg [esi + Ball.y_Vel]   		; Reverse the vertical velocity of the ball
 		ret
+	
 	negVelocityX:
 		neg [esi + Ball.x_Vel]           ; Reverses the horizontal velocity of the ball
 		ret
+	
 	endMoveBall:
 		ret							; Needed otherwise go trough the rest of the procedure
+	
 	gameOver:
 		call terminateProcess			; pop pop is needed if not terminate in future
+	
 	return:
-	;popAll:
-	;cmp esp, ebp
-	;je return2
-	;pop eax
-	;jmp popAll
-	;return2:
-	ret
+		ret
 ENDP moveBall
 
 PROC collision
@@ -348,7 +327,7 @@ PROC collision
 		pop ebx					; restores column index in ebx
 			
 		;the goal here is to transform the row and colums information in 
-		;1 index (ecx) to acces the desired element in the matrix Brick_Array 	
+		;1 index (ecx) to acces the desired element in level_bricks Array 	
 		mov ecx, 10
 		imul ecx				; multiply row index (eax) * 10 (10 elements per row)
 		mov ecx, eax			
@@ -399,12 +378,7 @@ PROC collision
 		cmp [esi + Ball.y_Pos], eax										;Ball_Y <= block_Y + block_Height								
 		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
 		
-		; push edi
-
-		; mov edi, offset Brick_Visibility						; is Brick visibility not already in edi???
-		
 		movzx eax, [edi + ecx + Brick.Active]								
-		; pop edi
 		
 		cmp eax, 0												; Check the visibility (if the brick is already dead then there is no collision)
 		
@@ -554,26 +528,20 @@ ENDP intersect
 PROC updateBrick
 	; ecx, esi and edi already defined before function call
 	; ecx equals the brick index
-	; esi equals Brick_Array offset
-	; edi equals Brick_Array_Color offset
+	; esi equals game_ball Array pointer
+	; edi equals level_bricks Array pointer
 	USES eax, ebx, edx, ecx
 
-	; Brick update
-		
+	; Brick update	
 	mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
 	mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
-	sub [edi + ecx + Brick.Color], 1										; Subtract 1 from the color index of the bricks to show damage
-	mov dx, [edi + ecx + Brick.Color]										; Initialize the color of the brick into dx
+	sub [edi + ecx + Brick.Color], 1		; Subtract 1 from the color index of the bricks to show damage
+	mov dx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx
 			
 	cmp dx, 0		; Check to if the brick has a black color
 	jg draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
 	
-	; push edi
-	
-	; mov edi, offset Brick_Visibility		; Initialize the Brick_Visibility offset into esi
-	mov [edi + ecx + Brick.Active], 0				; Set the brick visibility to zero, so the brick is not interactable
-	
-	; pop edi
+	mov [edi + ecx + Brick.Active], 0				; Set the Brick interactability to zero, so the brick is not interactable
 	
 	draw: 
 		call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], dx		; Drawning the brick in the new color
@@ -582,11 +550,11 @@ PROC updateBrick
 
 ENDP updateBrick
 
-PROC movePaddle					;Compute movement of the paddles
-	ARG @@Brick_Array:dword	
+;Compute movement of the paddles
+PROC movePaddle					
+	; ARG @@Brick_Array:dword	
 	USES eax, ebx, ecx, edx
-	; mov esi, [@@Brick_Array]
-;       Paddle movement
+	; Paddle movement
 	checkPaddleMovement:
 		mov ah, 01h
 		int 16h
@@ -648,7 +616,7 @@ PROC movePaddle					;Compute movement of the paddles
 	cmp [Colliding], 0
 	je exitPaddleMovement							; if not exit
 	call drawBall, [Black]							;remove the ball
-	mov ebx, [edi + Brick.x_Pos]					; [esi] = paddle_X
+	mov ebx, [edi + Brick.x_Pos]					
 	sub ebx, [esi + Ball.Radius]
 	sub ebx, [esi + Ball.Radius]
 	
@@ -668,7 +636,7 @@ PROC movePaddle					;Compute movement of the paddles
 	je exitPaddleMovement							; if not exit
 	
 	call drawBall, [Black]							; remove the ball	
-	mov ebx, [edi + Brick.x_Pos]					; [esi] = paddle_X
+	mov ebx, [edi + Brick.x_Pos]					
 	add ebx, [edi + Brick.Width]
 	mov [esi + Ball.x_Pos], ebx						;move the ball to Paddle_X + Paddle_Width
 	call drawBall, [White]      					;draw the ball
@@ -682,31 +650,25 @@ ENDP movePaddle
 
 ; Draws the differen levels of the bricks
 PROC drawBricks
-	; ARG @@Brick_Array:dword, @@Brick_Array_Color:dword
     USES eax, ebx, ecx, edx, edi
     
-	; mov esi, [@@Brick_Array]
-	; mov edi, [@@Brick_Array_Color]
-	mov ecx, 0
+	xor ecx, ecx
     
     brickloop:
-		
-        ; mov eax, [esi + (0 * Brick_Array_Columns + ecx) * 4]    ; x-coordinate
-        ; mov ebx, [esi + (1 * Brick_Array_Columns + ecx) * 4]    ; y-coordinate 
 		mov eax, [edi + ecx + Brick.x_Pos]    ; x-coordinate
         mov ebx, [edi + ecx + Brick.y_Pos]    ; y-coordinate 
 		mov dx, [edi + ecx + Brick.Color]	  ; color
 		
         call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], dx
         
-		add ecx, 23
+		add ecx, 23		; Add amount of bytes in Brick struct to move to next brick in level_bricks
 		
 		mov eax, 23
 		xor edx, edx
 		mov ebx, 41
 		mul ebx
 		
-        cmp ecx, eax   ;could also put initial value of ecx at Brick_Array_Total and dec ecx and loop brick loop is the same maybe easier to compute?
+        cmp ecx, eax	; Check to see if all the Bricks are drawn
         jl brickloop
         
     ret
@@ -714,6 +676,7 @@ PROC drawBricks
 ENDP drawBricks
 
 PROC GUI
+	; Not all levels are created, this is a temporary procedure
 	USES eax, edx
 	
 	call setVideoMode, 03h
@@ -802,8 +765,6 @@ PROC GUI
 			jmp level_selected
 		
 		lev1:
-			; mov esi, offset Brick_Array
-			; mov edi, offset Brick_Array_Color
 			
 			call ReadFile, offset test_file, offset dataread, DATASIZE, 41
 			
@@ -910,6 +871,7 @@ PROC ReadFile
 	call terminateProcess	
 ENDP ReadFile
 
+; This printing procedure is used to debug the code, it is put into comment when not used
 ; PROC printUnsignedInteger
 	; ARG @@number:word
 	; USES eax, ebx, ecx, edx
@@ -965,9 +927,6 @@ ENDP ReadFile
 
 ; ENDP waitForSpecificKeystroke
 
-
-
-
 ; Terminate the program.
 PROC terminateProcess
 	USES eax
@@ -984,13 +943,7 @@ PROC main
     push ds
     pop es
 
-    ; call setVideoMode, 13h
-
 	call GUI
-
-    ; Use the variables from DATASEG as arguments
-		
-	; call drawBricks, offset Brick_Array, offset Brick_Array_Color	; Width and Height as arguments
 	
 	call drawBricks
 
@@ -1010,21 +963,17 @@ PROC main
 		cmp dl, [Last_Time]  					;is the current time equal to the previous one(Last_Time)?
 		je checkTime    		    			;if it is the same, check again
 
-		;If it reaches this point, it'sdddddd because the time has passed (more than 1 100th of a second (clock resolution))
+		;If it reaches this point, it's because the time has passed (more than 1 100th of a second (clock resolution))
 
 		mov [Last_Time], dl              		;update time
 		
 		call drawBall, [Black]		;remove the ball
 		call moveBall               ;move the ball
 		call drawBall, [White]      ;draw the ball
-
-		; call drawPaddle, offset Brick_Array, [Black] 	;remove the paddle			
-		; call movePaddle, offset Brick_Array            	;move the paddles (check for pressing of keys)
-		; call drawPaddle, offset Brick_Array, [White]     ;draw the paddles with the updated positions
 		
-		call drawPaddle, edi, [Black] 	;remove the paddle			
-		call movePaddle, edi            	;move the paddles (check for pressing of keys)
-		call drawPaddle, edi, [White]     ;draw the paddles with the updated positions
+		call drawPaddle, [Black] 	;remove the paddle			
+		call movePaddle		        ;move the paddles (check for pressing of keys)
+		call drawPaddle, [White]   	;draw the paddles with the updated positions
 		
 		
 		jmp checkTime	;after everything checks time again
@@ -1058,31 +1007,11 @@ DATASEG
 	readErrorMsg db "could not read data", 13, 10, '$'
 	closeErrorMsg db "error during file closing", 13, 10, '$'
 
-	; Ball variables
-	; Ball_X dd 160
-	; Ball_Y dd 100
-	; The speed is constant in magnitude but they are not constants as they vary in sign.	
-	; Ball_VX dd -05h               			;X (horizontal) velocity of the ball (5px)
-	; Ball_VY dd 03           				;Y (vertical) velocity of the ball (2px)
-
-	; Ball constants
-	; Ball_Size dd 3
-
-	;Paddle variables
-	; Paddle_X dd 160
-
-	; paddle constants
-	; Paddle_Y dd 180
-	; Paddle_Width dd 25                  	;default paddle width (25px)
-	; Paddle_Height dd 7              		;default paddle height (7px)
-	; Paddle_V dd 0Fh               			;default paddle velocity (10 px/100th sec  ??? excesive speed)
-
 	;Game Constatnt
 	Last_Time db 0                        	; Variable used when checking if the time has changed
-	; Window_Width dd 140h					; Window_Width(320px in hex)
-	; Window_Heigth dd 0C8h					; Window_Heigth (200px in hex)
 	Exit_Game db 0							; Exiting Boolean
 	Colliding db 0							; Colliding Boolean
+	
 	; colors
 	Black dw 0
 	White dw 15
@@ -1122,11 +1051,9 @@ DATASEG
 	; total 22 bytes per Paddle
 	ENDS Paddle
 	
-	level_bricks Brick 41 dup (<0, 0, 0, 25, 7, 0, 1>)
+	level_bricks Brick 41 dup (<0, 0, 0, 0, 0, 0, 0>)
 		
-	game_ball Ball <157, 97, 5, -3, 3>
-
-	; game_paddle Paddle <160, 180, 15, 25, 7, 15>
+	game_ball Ball <157, 97, 4, -3, 3>
 		
 ; -------------------------------------------------------------------
 UDATASEG
