@@ -17,8 +17,10 @@ ASSUME cs:_TEXT,ds:FLAT,es:FLAT,fs:FLAT,gs:FLAT
 VMEMADR EQU 0A0000h	; video memory address
 SCRWIDTH EQU 320	; screen witdth
 SCRHEIGHT EQU 200	; screen height
-	
-DATASIZE EQU 943 ;bytes of data in file	
+
+DATASIZE_Arrow EQU 25 * 25 ;bytes of data in file	
+DATASIZE_Bricks EQU 1200 ;bytes of data in file	
+DATASIZE_FS EQU SCRWIDTH * SCRHEIGHT
 ; -------------------------------------------------------------------
 CODESEG
 
@@ -36,8 +38,8 @@ ENDP setVideoMode
 
 PROC drawRectangle
 	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@col:byte   ; col = 15 is white
-	USES 	eax, ecx, edx, edi ; note: MUL uses edx!
-
+	USES 	eax, ecx, edx ; note: MUL uses edx!
+	push edi
 	; Compute the index of the rectangle's top left corner
 	mov eax, [@@y0]
 	mov edx, SCRWIDTH
@@ -68,15 +70,49 @@ PROC drawRectangle
 	; Plot the bottom horizontal edge.
 	mov	ecx, edx
 	rep stosb
+	
+	pop edi
+	
+	; movzx eax, [@@col]
+	; call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], eax
 	ret
 ENDP drawRectangle
 
+PROC fillRectangle
+	ARG @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword, @@col:byte
+	USES eax, ebx, ecx, edx
+	push edi
+	mov eax, [@@y_Pos]
+	xor edx, edx
+	mov ebx, SCRWIDTH
+	imul ebx
+	add eax, [@@x_Pos]
+	mov edi, VMEMADR
+	add edi, eax
+	
+	mov ebx, [@@Height]
+	fill_rows:
+		mov al, [@@col]
+		mov ecx, [@@Width] 
+		rep stosb
+		add edi, SCRWIDTH
+		sub edi, [@@Width]
+		
+		dec ebx
+		cmp ebx, 0
+		jg fill_rows
+		
+	pop edi
+	ret
+
+ENDP fillRectangle
+
 PROC drawBall
-	ARG @@col:word
-	; USES eax, ebx, ecx, edx, edi
+	ARG @@col:dword
+	USES eax, ebx, ecx, edx
 
 	lea esi, [game_ball]			; Load effective adress of the game_ball array with the Ball struct into esi
-
+	
 	mov eax, [esi + Ball.x_Pos]		; Initialize the x posiition of the ball into eax
 	mov ebx, [esi + Ball.y_Pos]		; Initialize the y position of the ball into ebx
 	mov ecx, [esi + Ball.Radius]
@@ -104,7 +140,7 @@ PROC drawBall
 ENDP drawBall
 
 PROC drawPaddle
-	ARG @@col:word
+	ARG @@col:dword
 	USES eax, ebx, ecx, edx
 	
 	mov eax, [edi + Brick.x_Pos]    ; x-coordinate Paddle
@@ -123,7 +159,8 @@ PROC moveBall
 	; edi equals the level_bricks Array pointer
 	USES eax, ebx, ecx, edx
 	
-	lea esi, [game_ball]	; Load effective adress of game_ball struct array to esi
+	; lea esi, [game_ball]	; Load effective adress of game_ball struct array to esi
+	
 	
 	; Move ball according to the speed
 	mov eax, [esi + Ball.x_Vel]
@@ -142,12 +179,12 @@ PROC moveBall
 	sub eax, [esi + Ball.Radius]
 	sub eax, [esi + Ball.Radius]
 	sub eax, [esi + Ball.Radius]
-	sub eax, [esi + Ball.Radius]
+	; sub eax, [esi + Ball.Radius]
 	
 	cmp [esi + Ball.x_Pos], eax
 	jge negVelocityX					; If the ball hits right border, negate x velocity
 
-	cmp [esi + Ball.y_Pos], 0
+	cmp [esi + Ball.y_Pos], 1
 	jle negVelocityY					; If the ball hits upper border, negate x velocity
 
 	mov eax, SCRHEIGHT
@@ -310,27 +347,29 @@ PROC collision
 		; determine wich column should be checked
 		mov eax, [esi + Ball.x_Pos]
 		add eax, [esi + Ball.Radius]	; calculate the x-coordinate of the center of the ball
-		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
-		mov ebx, 1Fh			; 31 px per column tting
+		sub eax, 5						; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
+		mov ebx, 31						; 31 px per column
 		xor edx, edx
-		div ebx                 ; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
+		div ebx                 		; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
 		
-		push eax				; store column index in stack
+		push eax						; store column index in stack
 		
 		mov eax, [esi + Ball.y_Pos]
 		add eax, [esi + Ball.Radius]	; calculate the y-coordinate of the center of the ball
-		sub eax, 5				; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
-		mov ebx, 0Dh			; 13 px per column
+		sub eax, 5						; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
+		mov ebx, 13						; 13 px per row
 		xor edx, edx
-		div ebx					; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
-
-		pop ebx					; restores column index in ebx
+		div ebx							; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
 			
 		;the goal here is to transform the row and colums information in 
 		;1 index (ecx) to acces the desired element in level_bricks Array 	
 		mov ecx, 10
 		imul ecx				; multiply row index (eax) * 10 (10 elements per row)
 		mov ecx, eax			
+		
+		pop eax
+		mov ebx, eax					; restores column index in ebx
+		
 		add ecx, ebx			; add column index (ebx) 
 		add ecx, 1				
 		
@@ -339,7 +378,7 @@ PROC collision
 		
 		push ebx
 		
-		mov ebx, 23
+		mov ebx, 28
 		imul ebx
 		
 		pop ebx
@@ -378,7 +417,7 @@ PROC collision
 		cmp [esi + Ball.y_Pos], eax										;Ball_Y <= block_Y + block_Height								
 		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
 		
-		movzx eax, [edi + ecx + Brick.Active]								
+		mov eax, [edi + ecx + Brick.Active]								
 		
 		cmp eax, 0												; Check the visibility (if the brick is already dead then there is no collision)
 		
@@ -536,15 +575,15 @@ PROC updateBrick
 	mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
 	mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
 	sub [edi + ecx + Brick.Color], 1		; Subtract 1 from the color index of the bricks to show damage
-	mov dx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx
+	mov edx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx
 			
-	cmp dx, 0		; Check to if the brick has a black color
+	cmp edx, 0		; Check to if the brick has a black color
 	jg draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
 	
 	mov [edi + ecx + Brick.Active], 0				; Set the Brick interactability to zero, so the brick is not interactable
 	
 	draw: 
-		call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], dx		; Drawning the brick in the new color
+		call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], edx		; Drawning the brick in the new color
 
 	ret
 
@@ -614,7 +653,7 @@ PROC movePaddle
 	je exitPaddleMovement
 	call collision, 1								; check if the ball is colliding now (since the paddle movement)
 	cmp [Colliding], 0
-	je exitPaddleMovement							; if not exit
+	je short exitPaddleMovement							; if not exit
 	call drawBall, [Black]							;remove the ball
 	mov ebx, [edi + Brick.x_Pos]					
 	sub ebx, [esi + Ball.Radius]
@@ -650,148 +689,233 @@ ENDP movePaddle
 
 ; Draws the differen levels of the bricks
 PROC drawBricks
-    USES eax, ebx, ecx, edx, edi
+    USES eax, ebx, ecx, edx
     
 	xor ecx, ecx
     
     brickloop:
 		mov eax, [edi + ecx + Brick.x_Pos]    ; x-coordinate
         mov ebx, [edi + ecx + Brick.y_Pos]    ; y-coordinate 
-		mov dx, [edi + ecx + Brick.Color]	  ; color
+		mov edx, [edi + ecx + Brick.Color]	  ; color
 		
-        call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], dx
+        call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], edx
         
-		add ecx, 23		; Add amount of bytes in Brick struct to move to next brick in level_bricks
+		add ecx, 28		; Add amount of bytes in Brick struct to move to next brick in level_bricks
 		
-		mov eax, 23
+		mov eax, 28
 		xor edx, edx
 		mov ebx, 41
 		mul ebx
 		
         cmp ecx, eax	; Check to see if all the Bricks are drawn
         jl brickloop
-        
+	
     ret
 
 ENDP drawBricks
 
-PROC GUI
+; PROC GUI
 	; Not all levels are created, this is a temporary procedure
-	USES eax, edx
+	; USES eax, edx
 	
-	call setVideoMode, 03h
+	; call setVideoMode, 03h
 	
-	mov ah, 09h
+	; mov ah, 09h
 	
-	mov edx, offset Levels		; Initialize the offset of the Levels string to edx
-	int 21h						; Print the string
+	; mov edx, offset Levels		; Initialize the offset of the Levels string to edx
+	; int 21h						; Print the string
 	
-	mov edx, offset Endless		; Initialize the offset of the Endless string to edx
-	int 21h						; Print the string
+	; mov edx, offset Endless		; Initialize the offset of the Endless string to edx
+	; int 21h						; Print the string
 	
-	mov edx, offset Exit		; Initialize the offset of the Exit string to edx
-	int 21h						; Print the string
+	; mov edx, offset Exit		; Initialize the offset of the Exit string to edx
+	; int 21h						; Print the string
 
-	press_check:
+	; press_check:
+		; mov ah, 01h
+		; int 16h
+		; jz press_check
+
+		; mov ah, 00h
+		; int 16h
+
+
+		; cmp al, 97				; 97 is ASCII code for 'a'
+		; je levels				; Jump if equal to level
+		
+		; cmp al, 65				; 65 is ASCII code for 'A'
+		; je levels				; Jump if equal to level
+		
+		
+		; cmp al, 98				; 98 is ASCII code for 'b'
+		; je endless				; Jump if equal to endless
+		
+		; cmp al, 66				; 66 is ASCII code for 'B'
+		; je endless				; Jump if equal to endless
+		
+		
+		; cmp al, 27				; 27 is ASCII code for 'ESC'
+		; je exit					; Jump if equal to exit
+		
+		; jmp press_check
+
+	; levels:
+		; call setVideoMode, 03h
+		
+		; mov ah, 09h
+		
+		; mov edx, offset LevA		; Initialize the offset of the Level 1 string to edx
+		; int 21h						; Print the string
+		
+		; mov edx, offset LevB		; Initialize the offset of the Level 2 string to edx
+		; int 21h						; Print the string
+		
+		; mov edx, offset LevC		; Initialize the offset of the Level 3 string to edx
+		; int 21h						; Print the string
+		
+		; level_selected:
+			; mov ah, 01h
+			; int 16h
+			; jz level_selected
+
+			; mov ah, 00h
+			; int 16h
+		
+			; cmp al, 97				; 97 is ASCII code for 'a'
+			; je lev1					; Jump if equal to level
+			
+			; cmp al, 65				; 65 is ASCII code for 'A'
+			; je lev1					; Jump if equal to level 
+			
+			
+			; cmp al, 98				; 98 is ASCII code for 'b'
+			; je lev2					; Jump if equal to endless
+			
+			; cmp al, 66				; 66 is ASCII code for 'B'
+			; je lev2					; Jump if equal to endless
+
+			
+			; cmp al, 99				; 99 is ASCII code for 'c'
+			; je lev3					; Jump if equal to endless
+			
+			; cmp al, 67				; 67 is ASCII code for 'C'
+			; je lev3					; Jump if equal to endless
+			
+			; jmp level_selected
+		
+		; lev1:
+			
+			; call ReadFile, offset level_file, offset dataread, DATASIZE, 41
+			
+			; call setVideoMode, 13h
+		
+			; ret
+			
+		; lev2:
+			; call terminateProcess
+			; ret
+			
+		; lev3:
+			; call terminateProcess
+			; ret
+	
+	; endless:
+		; call terminateProcess
+		; ret
+	
+	; exit:
+		; call terminateProcess
+		; ret
+
+; ENDP GUI
+
+PROC gui
+	USES eax
+	
+	cmp [Skip_GUI], 0
+	je short @@press_check
+	
+	ret
+	
+	@@press_check:
 		mov ah, 01h
 		int 16h
-		jz press_check
+		jz @@press_check
 
 		mov ah, 00h
 		int 16h
+		
+		call ReadFile, offset Arrow, offset dataread_Arrow, DATASIZE_Arrow
 
-
-		cmp al, 97				; 97 is ASCII code for 'a'
-		je levels				; Jump if equal to level
+		cmp al, 114				; 114 is ASCII code for 'r'
+		je @@gui_1				; Jump if equal to level
 		
-		cmp al, 65				; 65 is ASCII code for 'A'
-		je levels				; Jump if equal to level
-		
-		
-		cmp al, 98				; 98 is ASCII code for 'b'
-		je endless				; Jump if equal to endless
-		
-		cmp al, 66				; 66 is ASCII code for 'B'
-		je endless				; Jump if equal to endless
+		cmp al, 82				; 82 is ASCII code for 'R'
+		je @@gui_1				; Jump if equal to level
 		
 		
-		cmp al, 27				; 27 is ASCII code for 'ESC'
-		je exit					; Jump if equal to exit
+		cmp al, 102				; 102 is ASCII code for 'f'
+		je gui_2				; Jump if equal to endless
 		
-		jmp press_check
-
-	levels:
-		call setVideoMode, 03h
+		cmp al, 70				; 70 is ASCII code for 'F'
+		je gui_2				; Jump if equal to endless
 		
-		mov ah, 09h
+		cmp al, 13				; 13 is ASCII code for 'Enter'
+		je @@enter_pressed			; Jump if equal to exit
 		
-		mov edx, offset LevA		; Initialize the offset of the Level 1 string to edx
-		int 21h						; Print the string
-		
-		mov edx, offset LevB		; Initialize the offset of the Level 2 string to edx
-		int 21h						; Print the string
-		
-		mov edx, offset LevC		; Initialize the offset of the Level 3 string to edx
-		int 21h						; Print the string
-		
-		level_selected:
-			mov ah, 01h
-			int 16h
-			jz level_selected
-
-			mov ah, 00h
-			int 16h
-		
-			cmp al, 97				; 97 is ASCII code for 'a'
-			je lev1					; Jump if equal to level
-			
-			cmp al, 65				; 65 is ASCII code for 'A'
-			je lev1					; Jump if equal to level 
-			
-			
-			cmp al, 98				; 98 is ASCII code for 'b'
-			je lev2					; Jump if equal to endless
-			
-			cmp al, 66				; 66 is ASCII code for 'B'
-			je lev2					; Jump if equal to endless
-
-			
-			cmp al, 99				; 99 is ASCII code for 'c'
-			je lev3					; Jump if equal to endless
-			
-			cmp al, 67				; 67 is ASCII code for 'C'
-			je lev3					; Jump if equal to endless
-			
-			jmp level_selected
-		
-		lev1:
-			
-			call ReadFile, offset test_file, offset dataread, DATASIZE, 41
-			
-			call setVideoMode, 13h
-		
-			ret
-			
-		lev2:
-			call terminateProcess
-			ret
-			
-		lev3:
-			call terminateProcess
-			ret
-	
-	endless:
-		call terminateProcess
 		ret
+		jmp @@press_check
+		
+	@@gui_1:
+		call fillRectangle, 192, 137, 25, 25, 0
+		call drawSprite, offset dataread_Arrow, 192, 104, 25, 25
+		
+		mov ebx, 1	; Play index
+		
+		ret
+		
+	gui_2: 
+		call fillRectangle, 192, 104, 25, 25, 0
+		call drawSprite, offset dataread_Arrow, 192, 137, 25, 25
 	
-	exit:
-		call terminateProcess
+		mov ebx, 2	; Exit index
+		
 		ret
 
-ENDP GUI
+	@@enter_pressed:
+		call checkSprite
+		mov [Skip_GUI], 1
+		
+		ret		
+
+ENDP gui
+
+PROC checkSprite
+	USES ebx
+	
+	cmp ebx, 1
+	je level_initialize
+	
+	cmp ebx, 2
+	je exit_game
+	
+	ret
+	
+	level_initialize:
+		call ReadFile, offset level_file, offset dataread_Level, DATASIZE_Bricks
+		call initializeLevel, offset dataread_Level, 41
+		
+		ret
+		
+	exit_game:
+		call terminateProcess
+		
+		ret
+		
+ENDP checkSprite
 
 PROC ReadFile
-	ARG	 @@filepathptr:dword, @@dataptr:dword, @@noofbytes:dword, @@Brick_Amount:dword
+	ARG	 @@filepathptr:dword, @@dataptr:dword, @@noofbytes:dword
 	USES eax, ebx, ecx, edx
 	
 	; open file, get filehandle in AX
@@ -801,7 +925,7 @@ PROC ReadFile
 	int 21h
 	
 	mov  edx, offset openErrorMsg
-	jc short @@print_error ; carry flag is set if error occurs
+	jc @@print_error ; carry flag is set if error occurs
 
 	; read file data 
 	mov bx, ax ; move filehandle to bx
@@ -819,14 +943,30 @@ PROC ReadFile
 	
 	mov  edx, offset closeErrorMsg
 	jc @@print_error	; carry flag is set if error occurs
+
+	ret
+
+	@@print_error:
+		call setVideoMode, 03h
+		mov  ah, 09h
+		int  21h
 	
+		mov	ah,00h
+		int	16h
+		call terminateProcess	
+ENDP ReadFile
+
+PROC initializeLevel
+	ARG @@dataptr:dword, @@Brick_Amount:dword
+	USES eax, ebx, ecx, esi
 	; print to screen test data
 	mov esi, [@@dataptr]		; Initialize datapointer value into esi to read the right values of the file
 	lea edi, [level_bricks]		; Load effective adress of the level_bricks array which contain the Brick structs of the level
+
 	
 	; Calculate the amount of Bricks that need to be read from the file
 	xor edx, edx				; Set edx:eax to eax for multiplication
-	mov eax, 23					; Initalize amount of bytes in the Brick struct to eax
+	mov eax, 28					; Initalize amount of bytes in the Brick struct to eax
 	mov ebx, [@@Brick_Amount]	; Initalize amount of Bricks in the level to ebx
 	imul ebx					; Signed multiplication of the amount of Bricks to the amount of bytes to calculate the maximum amount of bytes to be read from the file
 	mov ecx, eax				; Store eax in ecx because eax will be overwritten
@@ -849,27 +989,72 @@ PROC ReadFile
 		lodsd									; Loads a dword (4 byte) value into eax
 		mov [edi + ebx + Brick.Height], eax		; Assign the Height value from the file into the Brick struct
 		
-		lodsw									; Loads a word (2 byte) value into ax
-		mov [edi + ebx + Brick.Color], ax		; Assign the Color value from the file into the Brick struct
+		lodsd									; Loads a word (2 byte) value into ax
+		mov [edi + ebx + Brick.Color], eax		; Assign the Color value from the file into the Brick struct
 		
-		lodsb									; Loads a byte (1 byte) value into al
-		mov [edi + ebx + Brick.Active], al		; Assign the Active value from the file into the Brick struct
+		lodsd									; Loads a byte (1 byte) value into al
+		mov [edi + ebx + Brick.Active], eax		; Assign the Active value from the file into the Brick struct
 		
-		add ebx, 23		; Add amount of bytes in Brick struct to continue to the next Brick
+		add ebx, 28		; Add amount of bytes in Brick struct to continue to the next Brick
 		cmp ebx, ecx	; Check to see if all the Bricks needed for the level are created
 		jl looptest	
 	
+	call fillBackground, 0
+	call drawBricks
+	
 	ret
 
-@@print_error:
-	call setVideoMode, 03h
-	mov  ah, 09h
-	int  21h
+ENDP initializeLevel
+
+PROC drawSprite
+	ARG	 @@dataptr: dword, @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword
+	USES esi,ecx
 	
-	mov	ah,00h
-	int	16h
-	call terminateProcess	
-ENDP ReadFile
+	push edi
+	mov eax, [@@y_Pos]	; y-coordinate
+	mov ebx, [@@x_Pos]	; x-coordinate
+	mov ecx, SCRWIDTH
+	xor edx, edx
+	imul ecx
+	
+	mov edi, eax
+	add edi, ebx
+	add edi, VMEMADR
+	
+	mov edx, [@@Height]
+	mov esi, [@@dataptr]
+	drawspriteloop:
+		
+		mov ecx, [@@Width]
+		rep movsb
+
+		add edi, SCRWIDTH
+		sub edi, [@@Width]
+		
+		dec edx
+		cmp edx, 0
+		jg drawspriteloop
+	
+	pop edi
+	ret	
+ENDP drawSprite
+
+; ; Fill the background (for mode 13h)
+PROC fillBackground
+	ARG @@color:byte
+	USES ecx, eax
+	
+	push edi
+	mov edi, VMEMADR
+	mov ecx, DATASIZE_FS
+	mov al, [@@color]
+	
+	rep stosb
+	
+	pop edi
+	ret
+
+ENDP fillBackground
 
 ; This printing procedure is used to debug the code, it is put into comment when not used
 ; PROC printUnsignedInteger
@@ -907,25 +1092,25 @@ ENDP ReadFile
 ; ENDP printUnsignedInteger
 
 ; Wait for a specific keystroke.
-; PROC waitForSpecificKeystroke
-	; USES eax
-	; press_check:
-		; mov ah, 01h
-		; int 16h
-		; jz press_check
+PROC waitForSpecificKeystroke
+	USES eax
+	press_check3:
+		mov ah, 01h
+		int 16h
+		jz press_check3
 
-		; mov ah, 00h
-		; int 16h
+		mov ah, 00h
+		int 16h
 
-		; cmp al, 27		;27 is ASCII code for 'ESC'
-		; jne press_check
+		cmp al, 27		;27 is ASCII code for 'ESC'
+		jne press_check3
 
-	; mov ax, 03h
-	; int 10h
+	mov ax, 03h
+	int 10h
 
-	; ret
+	ret
 
-; ENDP waitForSpecificKeystroke
+ENDP waitForSpecificKeystroke
 
 ; Terminate the program.
 PROC terminateProcess
@@ -936,16 +1121,52 @@ PROC terminateProcess
 	ret
 ENDP terminateProcess
 
+STRUC Brick
+		x_Pos dd ?		; x-position
+		y_Pos dd ?		; y-position
+		x_Vel dd ? 		; x_Velocity
+		Width dd ?		; Brick width
+		Height dd ?		; Brick height
+		Color dd ?		; color
+		Active dd ?		; interactability
+	; total 28 bytes per Brick
+	ENDS Brick
+	
+	STRUC Ball
+		x_Pos dd ?		; x-position
+		y_Pos dd ?		; y-position
+		x_Vel dd ?		; x-velocity
+		y_Vel dd ?		; y-velocity
+		Radius dd ?		; Ball radius
+		; Color dw ?		; Ball Color
+	; total 22 bytes per Ball
+	ENDS Ball
+	
+	; STRUC Sprites
+		; Width dd ?		; Sprite Width
+		; Height dd ?		; Sprite Height
+		; DATASIZE dd ?	; DATASIZE
+		; Dataoffset dd ?	; Data offset
+	; total 16 bytes per Sprite
+	; ENDS Sprites
+
 PROC main
     sti
     cld
 
     push ds
     pop es
-
-	call GUI
 	
-	call drawBricks
+	
+	call setVideoMode, 13h
+	
+	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
+	call fillBackground, 0
+	call drawSprite, offset dataread_GUI, 0, 0, 320, 200
+	
+	; call ReadFile, offset GUI, offset dataread_Sp, DATASIZE_Arrow
+	; call fillBackground, 0
+	; call drawSprite, offset dataread_Arrow, 0, 0
 
 	checkTime:                      			;time checking loop
 		; mov ah, 01h
@@ -967,29 +1188,31 @@ PROC main
 
 		mov [Last_Time], dl              		;update time
 		
+		call gui
+		
+		cmp [Skip_GUI], 0
+		je checkTime
+		
+		; call setVideoMode, 13h
 		call drawBall, [Black]		;remove the ball
 		call moveBall               ;move the ball
 		call drawBall, [White]      ;draw the ball
 		
+		
+		; call setVideoMode, 13h
 		call drawPaddle, [Black] 	;remove the paddle			
 		call movePaddle		        ;move the paddles (check for pressing of keys)
 		call drawPaddle, [White]   	;draw the paddles with the updated positions
-		
 		
 		jmp checkTime	;after everything checks time again
 
 		;call all update functions
 
-    ;call waitForSpecificKeystroke, 001Bh 		; keycode for ESC
+    call waitForSpecificKeystroke, 001Bh 		; keycode for ESC
 	exitGame:
 		call terminateProcess
 
-
-
 ENDP main
-
-
-
 ; -------------------------------------------------------------------
 DATASEG
 	; GUI strings
@@ -1001,8 +1224,7 @@ DATASEG
 	LevA db "Level 1      Press A", 10, 10, '$'
 	LevB db "Level 2      Press B", 10, 10, '$'
 	LevC db "Level 3      Press C", '$'
-
-	test_file db "level1.bin", 0
+	
 	openErrorMsg db "could not open file", 13, 10, '$'
 	readErrorMsg db "could not read data", 13, 10, '$'
 	closeErrorMsg db "error during file closing", 13, 10, '$'
@@ -1011,53 +1233,28 @@ DATASEG
 	Last_Time db 0                        	; Variable used when checking if the time has changed
 	Exit_Game db 0							; Exiting Boolean
 	Colliding db 0							; Colliding Boolean
-	
+	Skip_GUI db 0
 	; colors
-	Black dw 0
-	White dw 15
+	Black dd 0
+	White dd 15
 	
 	d_ratio dd 0
 	d_hor dd 0
 	d_vert dd 0
 	
-	STRUC Brick
-		x_Pos dd ?		; x-position
-		y_Pos dd ?		; y-position
-		x_Vel dd ? 		; x_Velocity
-		Width dd ?		; Brick width
-		Height dd ?		; Brick height
-		Color dw ?		; color
-		Active db ?		; interactability
-	; total 23 bytes per Brick
-	ENDS Brick
+	level_file db "level1.bin", 0
+	GUI db "GUI.bin", 0
+	Arrow db "Arrow.bin", 0
+	; GUI_1 db "GUI_1.bin", 0
+	; GUI_2 db "GUI_2.bin", 0
 	
-	STRUC Ball
-		x_Pos dd ?		; x-position
-		y_Pos dd ?		; y-position
-		x_Vel dd ?		; x-velocity
-		y_Vel dd ?		; y-velocity
-		Radius dd ?		; Ball radius
-		; Color dw ?		; Ball Color
-	; total 22 bytes per Ball
-	ENDS Ball
+	dataread_GUI db DATASIZE_FS dup (?)
+	dataread_Arrow db DATASIZE_Arrow dup (?)
+	dataread_Level db DATASIZE_Bricks dup (?)
 	
-	STRUC Paddle
-		x_Pos dd ?		; x-position
-		y_Pos dd ?		; y-position
-		x_Vel dd ?		; x-velocity
-		Width dd ?		; Brick width
-		Height dd ?		; Brick height
-		Color dw ?		; color
-	; total 22 bytes per Paddle
-	ENDS Paddle
-	
+	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
 	level_bricks Brick 41 dup (<0, 0, 0, 0, 0, 0, 0>)
-		
 	game_ball Ball <157, 97, 4, -3, 3>
-		
-; -------------------------------------------------------------------
-UDATASEG
-	dataread db DATASIZE dup (?)
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
