@@ -73,8 +73,8 @@ PROC drawRectangle
 	
 	pop edi
 	
-	; movzx eax, [@@col]
-	; call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], eax
+	movzx eax, [@@col]
+	call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], eax
 	ret
 ENDP drawRectangle
 
