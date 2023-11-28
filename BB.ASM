@@ -163,15 +163,20 @@ PROC moveBall
 	
 	
 	; Move ball according to the speed
-	mov eax, [esi + Ball.x_Vel]
-	add [esi + Ball.x_Pos], eax			; Move in x Direction (x_Pos + x_Vel * timestep)
+	mov eax, [esi + Ball.x_Pos]
+	add eax, [esi + Ball.x_Vel]
+	mov [esi + Ball.x_Pos], eax			; Move in x Direction (x_Pos + x_Vel * timestep) (Remember we are working with a fraction (1/Speed_Constant) of pixel for the game speed)
 	
-	mov eax, [esi + Ball.y_Vel]
-	add [esi + Ball.y_Pos], eax			; Move in y direction (y_Pos + y_Vel * timestep)
+	mov eax, [esi + Ball.y_Pos]
+	add eax, [esi + Ball.y_Vel]
+	mov [esi + Ball.y_Pos], eax			; Move in y direction (y_Pos + y_Vel * timestep)
 
+	
+	
 	; Check if it hits a border 
 	mov eax, [esi + Ball.Radius]
 	add eax, [esi + Ball.Radius]		; Right border + Ball_Diameter
+	add eax, [esi + Ball.Radius]		; Right border + Ball_Diameter	
 	cmp [esi + Ball.x_Pos], eax
 	jle negVelocityX					; If the ball hits left border, negate x velocity
 
@@ -195,29 +200,17 @@ PROC moveBall
 
 	
 	
-	; Split the screen in 2 (uneven) to isolate the paddle collision and the brick collision 
-	; We do not do this in the collision function so that we can manually decide the collision type (used in paddle movement by example)
-	cmp [esi + Ball.y_Pos], 174
-	jle brickCol							;if greater paddle collision, if lower or equal brickcolission
-	
-	; Paddle collision	
-	call collision, 1					
+	call collision					
 	cmp [Colliding], 0
 	je endMoveBall
-	jmp checkBorder							
-	
-	brickCol:
-	call collision, 2			
-	cmp [Colliding], 0
-	je endMoveBall
-	
-	checkBorder:
+	;xor ebx, ebx
+	;div ebx
+	;Check with border of the block is hit
 	push edx							;Stores Brick_Height
 	push ebx							;Stores Brick_Width
 	
 	cmp ecx, 0
 	je paddle							; in case of paddle collision skip updatebrick
-	
 	call updateBrick					; If a brick was hit update life/color and
 	
 	paddle:
@@ -325,106 +318,53 @@ PROC moveBall
 ENDP moveBall
 
 PROC collision
-	ARG @@type: byte
 	USES eax
 	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
 	;mov [Colliding], 0			Not needed as if ther is no collision it will be put to 0
-	
-	;Brick Collision	
-	cmp [@@type], 2
-	je brickCollision
-						
-	;paddleCollision:
-		xor ecx, ecx			; Set the value for ecx to 1 so that the collisionCheck only loops once ; is it not 0 the column in matrix
-		mov ebx, [edi + Brick.Width]
-		mov edx, [edi + Brick.Height]
-		
-		jmp collisionCheck		; Jump to collisionCheck to check the collision with the paddle
-		
-	brickCollision:
-	
-		; split in 10 columns and check wher the ball is situated
-		; determine wich column should be checked
-		mov eax, [esi + Ball.x_Pos]
-		add eax, [esi + Ball.Radius]	; calculate the x-coordinate of the center of the ball
-		sub eax, 5						; 5 px offset from both sides of the frame (grid with is 310 in stead of 320)
-		mov ebx, 31						; 31 px per column
-		xor edx, edx
-		div ebx                 		; stores the column (0 based index), where Ball_X is in, in eax and in edx the rest
-		
-		push eax						; store column index in stack
-		
-		mov eax, [esi + Ball.y_Pos]
-		add eax, [esi + Ball.Radius]	; calculate the y-coordinate of the center of the ball
-		sub eax, 5						; 5 px offset from both sides of the frame (grid with is 169 in stead of 200)
-		mov ebx, 13						; 13 px per row
-		xor edx, edx
-		div ebx							; stores the row (0 based index), where Ball_Y is in, in eax and in edx the rest
-			
-		;the goal here is to transform the row and colums information in 
-		;1 index (ecx) to acces the desired element in level_bricks Array 	
-		mov ecx, 10
-		imul ecx				; multiply row index (eax) * 10 (10 elements per row)
-		mov ecx, eax			
-		
-		pop eax
-		mov ebx, eax					; restores column index in ebx
-		
-		add ecx, ebx			; add column index (ebx) 
-		add ecx, 1				
-		
-		mov eax, ecx
-		xor edx, edx
-		
-		push ebx
-		
-		mov ebx, 28
-		imul ebx
-		
-		pop ebx
-		
-		mov ecx, eax
+	mov ecx, -28
+	collisionCheck:
+		add ecx, 28																; ecx = 0 is paddle so we need it if we dont decrease the last element is ecx = 1
 		
 		mov ebx, [edi + ecx + Brick.Width]
 		mov edx, [edi + ecx + Brick.Height]
-		;jmp collisionCheck
-		
-	collisionCheck:
 		; Collision with bricks and paddle is done with AABB (see more in the report)
 		;condition 1 for collision	
 		mov eax, [esi + Ball.x_Pos]			
 		add eax, [esi + Ball.Radius]		
 		add eax, [esi + Ball.Radius]									;maxX1 >= minX2
 		cmp eax, [edi + ecx + Brick.x_Pos]	;Ball_X + 2 * Ball_Size >= block_X
-		jl noCollision  										;if there's no collision exit collision with block (jump if less)
+		jl brickNotColliding  										;if there's no collision exit collision with block (jump if less)
 		
 		;condition 2 for collision
 		mov eax, [edi + ecx + Brick.x_Pos]	;initialize block_X in eax
 		add eax, ebx											;minX1 <= maxX2
 		cmp [esi + Ball.x_Pos], eax										;Ball_X <= block_X + block_Width									
-		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
+		jg brickNotColliding  										;if there's no collision exit collision with block (jump if greater)
 		
 		;condition 3 for collision
 		mov eax, [esi + Ball.y_Pos]			
 		add eax, [esi + Ball.Radius]		
 		add eax, [esi + Ball.Radius]									;maxY1 >= minY2
 		cmp eax, [edi + ecx + Brick.y_Pos]	;Ball_Y + 2 * Ball_Size >= block_Y
-		jl noCollision  										;if there's no collision exit collision with block (jump if less)
+		jl brickNotColliding  										;if there's no collision exit collision with block (jump if less)
 		
 		;condition 4 for collision
 		mov eax, [edi + ecx + Brick.y_Pos]	;initialize block_Y in eax		
 		add eax, edx											;minY1 <= maxY2
 		cmp [esi + Ball.y_Pos], eax										;Ball_Y <= block_Y + block_Height								
-		jg noCollision  										;if there's no collision exit collision with block (jump if greater)
+		jg brickNotColliding  										;if there's no collision exit collision with block (jump if greater)
 		
 		mov eax, [edi + ecx + Brick.Active]								
-		
 		cmp eax, 0												; Check the visibility (if the brick is already dead then there is no collision)
+		je brickNotColliding
 		
-		je noCollision
+		;Colliding
 		mov [Colliding], 1										; Store the state in the collision bool
 		ret
-		noCollision:
+		brickNotColliding:
+		cmp ecx, 1178
+		jle collisionCheck
+		;noCollision:
 		mov [Colliding], 0
 		ret
 ENDP collision
@@ -1150,6 +1090,28 @@ STRUC Brick
 	; total 16 bytes per Sprite
 	; ENDS Sprites
 
+
+; wait for @@framecount frames
+proc wait_VBLANK
+	ARG @@framecount: word
+	USES eax, ecx, edx
+	mov dx, 03dah 					; Wait for screen refresh
+	movzx ecx, [@@framecount]
+	
+		@@VBlank_phase1:
+		in al, dx 
+		and al, 8
+		jnz @@VBlank_phase1
+		@@VBlank_phase2:
+		in al, dx 
+		and al, 8
+		jz @@VBlank_phase2
+	loop @@VBlank_phase1
+	
+	ret 
+endp wait_VBLANK
+
+
 PROC main
     sti
     cld
@@ -1168,7 +1130,7 @@ PROC main
 	; call fillBackground, 0
 	; call drawSprite, offset dataread_Arrow, 0, 0
 
-	checkTime:                      			;time checking loop
+	@@update:                      			;time checking loop
 		; mov ah, 01h
 		; int 16h
 
@@ -1181,17 +1143,10 @@ PROC main
 		mov ah,2Ch 								;get the system time
 		int 21h    								;ch = hour cl = minute dh = second dl = 1/100 seconds
 
-		cmp dl, [Last_Time]  					;is the current time equal to the previous one(Last_Time)?
-		je checkTime    		    			;if it is the same, check again
-
-		;If it reaches this point, it's because the time has passed (more than 1 100th of a second (clock resolution))
-
-		mov [Last_Time], dl              		;update time
-		
 		call gui
 		
 		cmp [Skip_GUI], 0
-		je checkTime
+		je wait_frame
 		
 		; call setVideoMode, 13h
 		call drawBall, [Black]		;remove the ball
@@ -1204,7 +1159,9 @@ PROC main
 		call movePaddle		        ;move the paddles (check for pressing of keys)
 		call drawPaddle, [White]   	;draw the paddles with the updated positions
 		
-		jmp checkTime	;after everything checks time again
+		wait_frame:
+		call wait_VBLANK, 1
+		jmp @@update				;after everything update again
 
 		;call all update functions
 
@@ -1230,7 +1187,7 @@ DATASEG
 	closeErrorMsg db "error during file closing", 13, 10, '$'
 
 	;Game Constatnt
-	Last_Time db 0                        	; Variable used when checking if the time has changed
+	Speed_Constant dd 9                        	; Variable used for making game slower if speed is smaller than this then it will be same as speed =0 because the division is rounded to 0
 	Exit_Game db 0							; Exiting Boolean
 	Colliding db 0							; Colliding Boolean
 	Skip_GUI db 0
@@ -1254,7 +1211,7 @@ DATASEG
 	
 	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
 	level_bricks Brick 41 dup (<0, 0, 0, 0, 0, 0, 0>)
-	game_ball Ball <157, 97, 4, -3, 3>
+	game_ball Ball <157, 97, 1, -1, 3>
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
