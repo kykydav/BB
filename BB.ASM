@@ -19,7 +19,7 @@ SCRWIDTH EQU 320	; screen witdth
 SCRHEIGHT EQU 200	; screen height
 
 DATASIZE_Arrow EQU 25 * 25 ;bytes of data in file	
-DATASIZE_Bricks EQU 1200 ;bytes of data in file	
+DATASIZE_Bricks EQU 7200 ;bytes of data in file	
 DATASIZE_FS EQU SCRWIDTH * SCRHEIGHT
 ; -------------------------------------------------------------------
 CODESEG
@@ -37,7 +37,7 @@ PROC setVideoMode
 ENDP setVideoMode
 
 PROC drawRectangle
-	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@col:byte   ; col = 15 is white
+	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@type:dword, @@col:byte   ; col = 15 is white
 	USES 	eax, ecx, edx ; note: MUL uses edx!
 	push edi
 	; Compute the index of the rectangle's top left corner
@@ -73,14 +73,21 @@ PROC drawRectangle
 	
 	pop edi
 	
+	cmp [@@type], 1			; 1 is not filled rectangle and 0 is filled rectangle
+	je @@done
+	
 	movzx eax, [@@col]
-	call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], eax
-	ret
+	call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], 0, 0, eax
+	
+	@@done:
+		ret
+		
 ENDP drawRectangle
 
 PROC fillRectangle
-	ARG @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword, @@col:byte
-	USES eax, ebx, ecx, edx
+	ARG @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword, @@type:dword, @@dataptr:dword, @@col:byte
+	USES eax, ebx, edx, esi, ecx
+	
 	push edi
 	mov eax, [@@y_Pos]
 	xor edx, edx
@@ -90,17 +97,29 @@ PROC fillRectangle
 	mov edi, VMEMADR
 	add edi, eax
 	
-	mov ebx, [@@Height]
-	fill_rows:
-		mov al, [@@col]
-		mov ecx, [@@Width] 
-		rep stosb
-		add edi, SCRWIDTH
-		sub edi, [@@Width]
+	mov edx, [@@Height]
+	mov esi, [@@dataptr]
+	@@Check: 
+		cmp [@@type], 0			; 0 means Rectangle and 1 means Sprite
+		je @@drawRectangle
 		
-		dec ebx
-		cmp ebx, 0
-		jg fill_rows
+		@@drawSprite:
+			mov ecx, [@@Width]
+			rep movsb
+			jmp @@drawloop
+			
+		@@drawRectangle:
+			mov al, [@@col]
+			mov ecx, [@@Width] 
+			rep stosb
+			
+		@@drawloop:
+			add edi, SCRWIDTH
+			sub edi, [@@Width]
+			
+			dec edx
+			cmp edx, 0
+			jg @@Check
 		
 	pop edi
 	ret
@@ -121,7 +140,7 @@ PROC drawBall
 
 	; Update the registers to draw the rest of the rectangles
 	drawball:
-		call drawRectangle, eax, ebx, ecx, edx, [@@col]		; Call the drawRectangle procedure using the color as an argument
+		call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]		; Call the drawRectangle procedure using the color as an argument
 		
 		cmp edx, [esi + Ball.Radius]	; Check to see if the ball is drawn
 		jle done						; Jump is lower or equal to done to end the procedure
@@ -148,7 +167,7 @@ PROC drawPaddle
 	mov ecx, [edi + Brick.Width]	; Width of the Paddle
 	mov edx, [edi + Brick.Height]	; Height of the Paddle
 	
-	call drawRectangle, eax, ebx, ecx, edx, [@@col]
+	call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]
 	
 	ret
 
@@ -211,7 +230,7 @@ PROC moveBall
 	
 	cmp ecx, 0
 	je paddle							; in case of paddle collision skip updatebrick
-	call updateBrick					; If a brick was hit update life/color and
+	call updateBrick, 0, ecx					; If a brick was hit update life/color and
 	
 	paddle:
 	;A and B are points in the intersect method (these represent the block border)
@@ -321,9 +340,10 @@ PROC collision
 	USES eax
 	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
 	;mov [Colliding], 0			Not needed as if ther is no collision it will be put to 0
-	mov ecx, -28
+	mov ecx, [Brick_Struct_Size]
+	neg ecx
 	collisionCheck:
-		add ecx, 28																; ecx = 0 is paddle so we need it if we dont decrease the last element is ecx = 1
+		add ecx, [Brick_Struct_Size]											; ecx = 0 is paddle so we need it if we dont decrease the last element is ecx = 1
 		
 		mov ebx, [edi + ecx + Brick.Width]
 		mov edx, [edi + ecx + Brick.Height]
@@ -361,8 +381,14 @@ PROC collision
 		;Colliding
 		mov [Colliding], 1										; Store the state in the collision bool
 		ret
+		
 		brickNotColliding:
-		cmp ecx, 1178
+		
+		mov eax, [Brick_Struct_Size]
+		xor edx, edx
+		imul [Level_Size]
+		
+		cmp ecx, eax
 		jle collisionCheck
 		;noCollision:
 		mov [Colliding], 0
@@ -505,26 +531,91 @@ PROC intersect
 ENDP intersect
 
 PROC updateBrick
+	ARG @@type:dword, @@hitbrick:dword
 	; ecx, esi and edi already defined before function call
 	; ecx equals the brick index
 	; esi equals game_ball Array pointer
 	; edi equals level_bricks Array pointer
 	USES eax, ebx, edx, ecx
-
-	; Brick update	
-	mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
-	mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
+	mov ecx, [Brick_Struct_Size]
+	cmp [@@type], 1		; Update moving bricks
+	je @@Brick_update
+		
+	mov ecx, [@@hitbrick]
+	; xor edx, edx
+	; mul [Brick_Struct_Size]
+	; mov ecx, eax
+	
 	sub [edi + ecx + Brick.Color], 1		; Subtract 1 from the color index of the bricks to show damage
-	mov edx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx
+	
+	@@Brick_update:	
+		mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
+		mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
+		mov edx, 0
+		
+		call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], 0, edx
+		
+		mov eax, [edi + ecx + Brick.x_Vel]
+		add [edi + ecx + Brick.x_Pos], eax
+		
+		mov eax, [edi + ecx + Brick.y_Vel]
+		add [edi + ecx + Brick.y_Pos], eax
+		
+		; call moveObject, [edi + ecx + Brick.x_Pos], [edi + ecx + Brick.y_Pos], [edi + ecx + Brick.x_Vel], [edi + ecx + Brick.y_Vel]
+	
+		mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
+		mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
+		
+		@@CheckTreshhold:
+			mov edx, [edi + ecx + Brick.Hor_limR]
+			sub edx, [edi + ecx + Brick.Width]
+			cmp eax, edx
+			jge @@neg_VelX
 			
-	cmp edx, 0		; Check to if the brick has a black color
-	jg draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
-	
-	mov [edi + ecx + Brick.Active], 0				; Set the Brick interactability to zero, so the brick is not interactable
-	
-	draw: 
-		call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], edx		; Drawning the brick in the new color
-
+			mov edx, [edi + ecx + Brick.Hor_limL]
+			cmp eax, edx
+			jle @@neg_VelX
+			
+			mov edx, [edi + ecx + Brick.Ver_limT]
+			cmp ebx, edx
+			jle @@neg_VelY
+			
+			mov edx, [edi + ecx + Brick.Ver_limB]
+			sub edx, [edi + ecx + Brick.Height]
+			cmp ebx, edx
+			jge @@neg_VelY
+			
+		@@Drawing:
+			mov edx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx	
+			
+			cmp edx, 0		; Check to if the brick has a black color
+			jg @@draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
+			
+			mov [edi + ecx + Brick.Active], 0				; Set the Brick interactability to zero, so the brick is not interactable
+			
+			@@draw: 
+				call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], 0, edx		; Drawning the brick in the new color
+			
+			jmp @@next
+			
+		@@neg_VelX:
+			neg [edi + ecx + Brick.x_Vel]
+			jmp @@Drawing
+			
+		@@neg_VelY:
+			neg [edi + ecx + Brick.y_Vel]
+			jmp @@Drawing
+		
+		@@next:
+			add ecx, [Brick_Struct_Size]
+			
+			mov eax, [Brick_Struct_Size]
+			xor edx, edx
+			imul ecx, [Level_Size]
+			
+			cmp ecx, eax
+			jle @@Brick_update
+		
 	ret
 
 ENDP updateBrick
@@ -629,6 +720,7 @@ ENDP movePaddle
 
 ; Draws the differen levels of the bricks
 PROC drawBricks
+	ARG @@Brick_Amount:dword
     USES eax, ebx, ecx, edx
     
 	xor ecx, ecx
@@ -638,13 +730,13 @@ PROC drawBricks
         mov ebx, [edi + ecx + Brick.y_Pos]    ; y-coordinate 
 		mov edx, [edi + ecx + Brick.Color]	  ; color
 		
-        call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], edx
+        call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], 0, edx
         
-		add ecx, 28		; Add amount of bytes in Brick struct to move to next brick in level_bricks
+		add ecx, [Brick_Struct_Size]		; Add amount of bytes in Brick struct to move to next brick in level_bricks
 		
-		mov eax, 28
+		mov eax, [Brick_Struct_Size]
 		xor edx, edx
-		mov ebx, 41
+		mov ebx, [@@Brick_Amount]
 		mul ebx
 		
         cmp ecx, eax	; Check to see if all the Bricks are drawn
@@ -770,7 +862,7 @@ ENDP drawBricks
 ; ENDP GUI
 
 PROC gui
-	USES eax
+	USES eax, ecx
 	
 	cmp [Skip_GUI], 0
 	je short @@press_check
@@ -786,37 +878,56 @@ PROC gui
 		int 16h
 		
 		call ReadFile, offset Arrow, offset dataread_Arrow, DATASIZE_Arrow
-
+		
+		cmp ebx, 3
+		je @@levelselect
+		
 		cmp al, 114				; 114 is ASCII code for 'r'
 		je @@gui_1				; Jump if equal to level
 		
 		cmp al, 82				; 82 is ASCII code for 'R'
 		je @@gui_1				; Jump if equal to level
 		
-		
 		cmp al, 102				; 102 is ASCII code for 'f'
-		je gui_2				; Jump if equal to endless
+		je short @@gui_2				; Jump if equal to endless
 		
 		cmp al, 70				; 70 is ASCII code for 'F'
-		je gui_2				; Jump if equal to endless
+		je @@gui_2				; Jump if equal to endless
 		
-		cmp al, 13				; 13 is ASCII code for 'Enter'
-		je @@enter_pressed			; Jump if equal to exit
+		@@levelselect:	
+			cmp al, 13				; 13 is ASCII code for 'Enter'
+			je @@enter_pressed		; Jump if equal to exit
+			
+			cmp ebx, 3
+			jne @@continue
+			
+			cmp al, 115
+			je @@left
+			
+			cmp al, 83
+			je @@left
+			
+			cmp al, 100
+			je @@right
+			
+			cmp al, 68
+			je @@right
 		
-		ret
-		jmp @@press_check
+		@@continue:
+			ret
+			jmp @@press_check
 		
 	@@gui_1:
-		call fillRectangle, 192, 137, 25, 25, 0
-		call drawSprite, offset dataread_Arrow, 192, 104, 25, 25
+		call fillRectangle, 192, 137, 25, 25, 0, 0, 0
+		call fillRectangle, 192, 104, 25, 25, 1, offset dataread_Arrow, 0
 		
 		mov ebx, 1	; Play index
 		
 		ret
 		
-	gui_2: 
-		call fillRectangle, 192, 104, 25, 25, 0
-		call drawSprite, offset dataread_Arrow, 192, 137, 25, 25
+	@@gui_2: 
+		call fillRectangle, 192, 104, 25, 25, 0, 0, 0
+		call fillRectangle, 192, 137, 25, 25, 1, offset dataread_Arrow, 0
 	
 		mov ebx, 2	; Exit index
 		
@@ -824,30 +935,129 @@ PROC gui
 
 	@@enter_pressed:
 		call checkSprite
+		
+		cmp ebx, 3
+		je @@press_check
+		
 		mov [Skip_GUI], 1
 		
 		ret		
+		
+	@@left:
+		mov ecx, 0
+		cmp [index], 0
+		jle @@borderleft
+		
+		mov eax, 100
+		xor edx, edx
+		imul [index]
+		add eax, 13
+		call drawRectangle, eax, 61, 94, 60, 1, 15
+
+		@@continueleft:
+			dec [index]
+			mov ecx, 2
+			cmp [index], 0
+			jge @@displaysprite
+		
+		inc [index]
+		@@borderleft:
+			ret
+		
+	@@right:
+		mov ecx, 1
+		cmp [index], 2
+		jge @@borderright
+		
+		mov eax, 100
+		xor edx, edx
+		imul [index]
+		add eax, 13
+		call drawRectangle, eax, 61, 94, 60, 1, 15
+		
+		@@continueright:
+			inc [index]
+			mov ecx, 2
+			cmp [index], 2
+			jle @@displaysprite
+			
+			dec [index]
+			
+		@@borderright:
+			ret
+		
+		@@displaysprite:
+			mov eax, 100
+			xor edx, edx
+			imul [index]
+			add eax, 13
+			
+			cmp ecx, 2
+			je @@drawselected
+			
+			call drawRectangle, eax, 61, 94, 60, 1, 15
+			
+			cmp ecx, 0
+			je @@continueleft
+			
+			cmp ecx, 1
+			je @@continueright
+			
+			ret
+			
+			@@drawselected:
+				call drawRectangle, eax, 61, 94, 60, 1, 2
+				
+				ret
 
 ENDP gui
 
 PROC checkSprite
-	USES ebx
 	
 	cmp ebx, 1
-	je level_initialize
+	je @@levelspage
 	
 	cmp ebx, 2
-	je exit_game
+	je @@exit_game
+	
+	cmp ebx, 3
+	je @@level_initialize
 	
 	ret
 	
-	level_initialize:
-		call ReadFile, offset level_file, offset dataread_Level, DATASIZE_Bricks
-		call initializeLevel, offset dataread_Level, 41
+	@@levelspage:
+		call ReadFile, offset level_page, offset dataread_GUI, DATASIZE_FS
+		call fillRectangle, 0, 0, 320, 200, 0, 0, 0
+		call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+		
+		mov ebx, 3
+		
+		ret
+	
+	@@level_initialize:
+		xor ebx, ebx
+		
+		cmp [index], 0
+		je @@level1
+		
+		cmp [index], 1
+		je @@level2
 		
 		ret
 		
-	exit_game:
+		@@level1:
+			call ReadFile, offset level1, offset dataread_Level, DATASIZE_Bricks
+			call initializeLevel, offset dataread_Level, 41
+			
+			ret
+		
+		@@level2:
+			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
+			call initializeLevel, offset dataread_Level, 2
+			
+			ret
+		
+	@@exit_game:
 		call terminateProcess
 		
 		ret
@@ -899,14 +1109,17 @@ ENDP ReadFile
 PROC initializeLevel
 	ARG @@dataptr:dword, @@Brick_Amount:dword
 	USES eax, ebx, ecx, esi
+	
+	mov eax, [@@Brick_Amount]
+	mov [Level_Size], eax
+	
 	; print to screen test data
 	mov esi, [@@dataptr]		; Initialize datapointer value into esi to read the right values of the file
 	lea edi, [level_bricks]		; Load effective adress of the level_bricks array which contain the Brick structs of the level
-
 	
 	; Calculate the amount of Bricks that need to be read from the file
 	xor edx, edx				; Set edx:eax to eax for multiplication
-	mov eax, 28					; Initalize amount of bytes in the Brick struct to eax
+	mov eax, [Brick_Struct_Size]					; Initalize amount of bytes in the Brick struct to eax
 	mov ebx, [@@Brick_Amount]	; Initalize amount of Bricks in the level to ebx
 	imul ebx					; Signed multiplication of the amount of Bricks to the amount of bytes to calculate the maximum amount of bytes to be read from the file
 	mov ecx, eax				; Store eax in ecx because eax will be overwritten
@@ -922,6 +1135,9 @@ PROC initializeLevel
 
 		lodsd									; Loads a dword (4 byte) value into eax
 		mov [edi + ebx + Brick.x_Vel], eax		; Assign the x_Vel value from the file into the Brick struct
+		
+		lodsd									; Loads a dword (4 byte) value into eax
+		mov [edi + ebx + Brick.y_Vel], eax		; Assign the y_Vel value from the file into the Brick struct
 
 		lodsd									; Loads a dword (4 byte) value into eax
 		mov [edi + ebx + Brick.Width], eax		; Assign the Width value from the file into the Brick struct
@@ -929,55 +1145,67 @@ PROC initializeLevel
 		lodsd									; Loads a dword (4 byte) value into eax
 		mov [edi + ebx + Brick.Height], eax		; Assign the Height value from the file into the Brick struct
 		
+		lodsd									; Loads a dword (4 byte) value into eax
+		mov [edi + ebx + Brick.Hor_limL], eax	; Assign the moving horizontal left treshhold value from the file into the Brick struct
+		
+		lodsd									; Loads a dword (4 byte) value into eax
+		mov [edi + ebx + Brick.Hor_limR], eax	; Assign the moving horizontal right treshhold value from the file into the Brick struct
+		
+		lodsd									; Loads a dword (4 byte) value into eax
+		mov [edi + ebx + Brick.Ver_limB], eax	; Assign the moving vertical bottom treshhold value from the file into the Brick struct
+		
+		lodsd									; Loads a dword (4 byte) value into eax
+		mov [edi + ebx + Brick.Ver_limT], eax	; Assign the moving vertical top treshhold value from the file into the Brick struct
+		
 		lodsd									; Loads a word (2 byte) value into ax
 		mov [edi + ebx + Brick.Color], eax		; Assign the Color value from the file into the Brick struct
 		
 		lodsd									; Loads a byte (1 byte) value into al
 		mov [edi + ebx + Brick.Active], eax		; Assign the Active value from the file into the Brick struct
 		
-		add ebx, 28		; Add amount of bytes in Brick struct to continue to the next Brick
+		add ebx, [Brick_Struct_Size]		; Add amount of bytes in Brick struct to continue to the next Brick
 		cmp ebx, ecx	; Check to see if all the Bricks needed for the level are created
 		jl looptest	
 	
 	call fillBackground, 0
-	call drawBricks
+	call drawBricks, [@@Brick_Amount]
 	
 	ret
 
 ENDP initializeLevel
 
-PROC drawSprite
-	ARG	 @@dataptr: dword, @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword
-	USES esi,ecx
+; PROC drawSprite
+	; ARG	 @@dataptr: dword, @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword
+	; USES esi,ecx
 	
-	push edi
-	mov eax, [@@y_Pos]	; y-coordinate
-	mov ebx, [@@x_Pos]	; x-coordinate
-	mov ecx, SCRWIDTH
-	xor edx, edx
-	imul ecx
+	; push edi
+	; mov eax, [@@y_Pos]	; y-coordinate
+	; mov ebx, [@@x_Pos]	; x-coordinate
+	; mov ecx, SCRWIDTH
+	; xor edx, edx
+	; imul ecx
 	
-	mov edi, eax
-	add edi, ebx
-	add edi, VMEMADR
+	; mov edi, eax
+	; add edi, ebx
+	; add edi, VMEMADR
 	
-	mov edx, [@@Height]
-	mov esi, [@@dataptr]
-	drawspriteloop:
+	; mov edx, [@@Height]
+	; mov esi, [@@dataptr]
+	; drawspriteloop:
 		
-		mov ecx, [@@Width]
-		rep movsb
+		; mov ecx, [@@Width]
+		; rep movsb
 
-		add edi, SCRWIDTH
-		sub edi, [@@Width]
+		; add edi, SCRWIDTH
+		; sub edi, [@@Width]
 		
-		dec edx
-		cmp edx, 0
-		jg drawspriteloop
+		; dec edx
+		; cmp edx, 0
+		; jg drawspriteloop
 	
-	pop edi
-	ret	
-ENDP drawSprite
+	; pop edi
+	; ret	
+; ENDP drawSprite
 
 ; ; Fill the background (for mode 13h)
 PROC fillBackground
@@ -1062,25 +1290,30 @@ PROC terminateProcess
 ENDP terminateProcess
 
 STRUC Brick
-		x_Pos dd ?		; x-position
-		y_Pos dd ?		; y-position
-		x_Vel dd ? 		; x_Velocity
-		Width dd ?		; Brick width
-		Height dd ?		; Brick height
-		Color dd ?		; color
-		Active dd ?		; interactability
-	; total 28 bytes per Brick
-	ENDS Brick
+	x_Pos dd ?		; x-position
+	y_Pos dd ?		; y-position
+	x_Vel dd ? 		; x_Velocity
+	y_Vel dd ?		; y_Velocity 
+	Width dd ?		; Brick width
+	Height dd ?		; Brick height
+	Hor_limL dd ?	; Horizontal moving treshold left
+	Hor_limR dd ?	; Horizontal moving treshold right
+	Ver_limB dd ?	; Vertical moving treshold bottom
+	Ver_limT dd ?	; Vertical moving treshold top
+	Color dd ?		; color
+	Active dd ?		; interactability
+	; total 48 bytes per Brick
+ENDS Brick
 	
-	STRUC Ball
-		x_Pos dd ?		; x-position
-		y_Pos dd ?		; y-position
-		x_Vel dd ?		; x-velocity
-		y_Vel dd ?		; y-velocity
-		Radius dd ?		; Ball radius
-		; Color dw ?		; Ball Color
-	; total 22 bytes per Ball
-	ENDS Ball
+STRUC Ball
+	x_Pos dd ?		; x-position
+	y_Pos dd ?		; y-position
+	x_Vel dd ?		; x-velocity
+	y_Vel dd ?		; y-velocity
+	Radius dd ?		; Ball radius
+	; Color dw ?		; Ball Color
+; total 22 bytes per Ball
+ENDS Ball
 	
 	; STRUC Sprites
 		; Width dd ?		; Sprite Width
@@ -1124,7 +1357,7 @@ PROC main
 	
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
 	call fillBackground, 0
-	call drawSprite, offset dataread_GUI, 0, 0, 320, 200
+	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
 	
 	; call ReadFile, offset GUI, offset dataread_Sp, DATASIZE_Arrow
 	; call fillBackground, 0
@@ -1153,6 +1386,7 @@ PROC main
 		call moveBall               ;move the ball
 		call drawBall, [White]      ;draw the ball
 		
+		call updateBrick, 1, 0
 		
 		; call setVideoMode, 13h
 		call drawPaddle, [Black] 	;remove the paddle			
@@ -1195,13 +1429,23 @@ DATASEG
 	Black dd 0
 	White dd 15
 	
+	index dd 0
+	
 	d_ratio dd 0
 	d_hor dd 0
 	d_vert dd 0
 	
-	level_file db "level1.bin", 0
+	; Struct size
+	Brick_Struct_Size dd 48
+	
+	;Level size
+	Level_Size dd 0
+	
+	level1 db "level1.bin", 0
+	level2 db "level2.bin", 0
 	GUI db "GUI.bin", 0
 	Arrow db "Arrow.bin", 0
+	level_page	db "Levelgui.bin", 0
 	; GUI_1 db "GUI_1.bin", 0
 	; GUI_2 db "GUI_2.bin", 0
 	
@@ -1210,7 +1454,7 @@ DATASEG
 	dataread_Level db DATASIZE_Bricks dup (?)
 	
 	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
-	level_bricks Brick 41 dup (<0, 0, 0, 0, 0, 0, 0>)
+	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
 	game_ball Ball <157, 97, 1, -1, 3>
 ; -------------------------------------------------------------------
 ; STACK
