@@ -313,6 +313,7 @@ PROC moveBall
 		jl hitRight										; The differentiation is not needed
 		;hitLeft
 		jmp negVelocityX
+		
 		hitRight:
 		jmp negVelocityX
 		; From here on it intersects with top 
@@ -545,6 +546,8 @@ PROC updateBrick
 	; xor edx, edx
 	; mul [Brick_Struct_Size]
 	; mov ecx, eax
+	
+	; neg [edi + ecx + Brick.x_Vel]
 	
 	sub [edi + ecx + Brick.Color], 1		; Subtract 1 from the color index of the bricks to show damage
 	
