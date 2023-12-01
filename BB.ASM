@@ -217,13 +217,26 @@ PROC moveBall
 	cmp [esi + Ball.y_Pos], eax
 	jge gameOver						; If the ball hits the lower border --> jump to gameOver
 
+	mov ecx, [Brick_Struct_Size]
+	neg ecx
 	
+	@@collisionCheck:
+		add ecx, [Brick_Struct_Size]							; ecx = 0 is paddle so we need it if we dont decrease the last element is ecx = 1
+		mov ebx, [edi + ecx + Brick.Width]
+		mov edx, [edi + ecx + Brick.Height]
+		call collision,[esi + Ball.x_Pos],[esi + Ball.y_Pos],[esi + Ball.Radius],[edi + ecx + Brick.x_Pos],[edi + ecx + Brick.y_Pos],[edi + ecx + Brick.Width], [edi + ecx + Brick.Height], [edi + ecx + Brick.Active]
+		cmp [Colliding],1
+		je @@collision
+		
+		mov eax, [Brick_Struct_Size]
+		xor edx, edx
+		imul [Level_Size]
+		cmp ecx, eax
+		jle @@collisionCheck
+		cmp [Colliding], 0
+		je endMoveBall
+	@@collision:
 	
-	call collision					
-	cmp [Colliding], 0
-	je endMoveBall
-	;xor ebx, ebx
-	;div ebx
 	;Check with border of the block is hit
 	push edx							;Stores Brick_Height
 	push ebx							;Stores Brick_Width
@@ -272,6 +285,9 @@ PROC moveBall
 		hitTop:
 		; From here on it intersects with top 
 		;pop eax
+		
+		cmp ecx, 0
+		je short gradient	
 		jmp negVelocityY
 	
 	cannotHitTop:
@@ -318,7 +334,11 @@ PROC moveBall
 		jmp negVelocityX
 		; From here on it intersects with top 
 		
-	;ret ; useless	
+	;ret ; useless
+	gradient:
+		
+		
+			
 	negVelocityY:
 		neg [esi + Ball.y_Vel]   		; Reverse the vertical velocity of the ball
 		ret
@@ -337,63 +357,153 @@ PROC moveBall
 		ret
 ENDP moveBall
 
+;------------------------------------------------------------------------------------------
+;The goal of the folowing procedures is to make a "gradiënt" that does a continuous refraction angle(x) function
+;The aproach is explained in detail in the report but basically the argument of the arcsine will be y = (X-pad_X - pad_width/2) / (pad_width/2) so that the angle with the vertical is 0 with the ball hitting the middle and maximal when hitting the side
+;the arcsine(y) is then divided by 2 so that the maximal angle = 45°
+;After that we use this angle to scale the VY and VX accordingly vx = sin(y/2) vx(base) vy = cos(y/2) vy(base)
+;Following code will use the fpu
+;Note the use of dword ptr to ensure that the instruction is correctly interpreting the memory operand as a 32-bit (doubleword) value.
+;------------------------------------------------------------------------------------------
+
+;Can handle signed x's
+PROC gradientdistance
+	LOCAL @@temp:dword
+	mov eax, [esi + Ball.x_Pos]
+	;mov [@@temp], [esi + Ball.x_Pos]
+	add eax, [esi + Ball.Radius]
+	mov [@@temp], eax
+	fild [dword ptr @@temp]						;FPU STACK: X
+	
+	mov eax, [edi + Brick.Width]
+	mov [@@temp], eax
+	fild [dword ptr @@temp]						;FPU STACK: Brick.width|X
+	mov [@@temp], 2
+	fidiv [dword ptr @@temp]					;FPU STACK: Brick.width/2|X
+	
+	mov eax, [edi + Brick.x_Pos]
+	mov [@@temp], eax
+	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Brick.width/2|X
+	fadd										;FPU STACK: Brick.x_Pos+Brick.width/2|X 
+												
+	fsub										;FPU STACK: X-Paddle_X - Paddle_width/2
+	
+	mov eax, [edi + Brick.Width] 		
+	mov [@@temp], eax
+	fild [dword ptr @@temp]						;FPU STACK: Paddle_width|X-Paddle_X - Paddle_width/2
+	mov [@@temp], 2
+	fidiv [dword ptr @@temp]					;FPU STACK: Paddle_width/2|X-pad_X - pad_width/2
+	fdiv										;FPU STACK: (X-pad_X - pad_width/2) / (pad_width/2)
+	
+	ret
+
+ENDP gradientdistance
+
+PROC pow
+	ARG  @@N: dword
+	LOCAL @@temp:dword
+	;USES ecx
+	mov ecx, [dword ptr @@N]               ; Move @@N to the exponent
+	dec ecx
+	call gradientdistance									; FPU STACK: X    
+	power:
+		call gradientdistance				; push the argument (y) on fpu stack
+        fmul st(0),st(1)           		; FPU STACK: X^(n) (1 < n < N)  Multiply st(0) by X
+        loop power
+	
+    ;fistp [dword ptr @@temp]         ; Store and pop last element from stack into the double word at the memory location pointed to by eax
+	;mov eax, [@@temp]
+	ret									;The procedure returns on the stack
+ENDP pow	
+
+PROC arcsine
+	LOCAL @@temp:dword, @@temp1:dword
+	call pow, 3					;FPU STACK: x^3
+	;mov  [@@temp], eax
+	;fild [dword ptr @@temp]				;FPU STACK: x^3
+	
+	
+	mov [@@temp], 6
+	fidiv [dword @@temp]				;FPU STACK: (1/6)*x^3
+	
+	call pow, 5					;FPU STACK: x^5|(1/6)*x^3
+	;mov  [@@temp], eax
+	;fild [dword ptr @@temp]				;FPU STACK: x^5|(1/6)*x^3
+	mov [@@temp], 3
+	;fild [dword ptr @@temp]				;FPU STACK: 3|x^5|(1/6)*x^3
+	fimul [dword ptr @@temp]					;FPU STACK: 3*x^5|(1/6)*x^3
+	mov [@@temp], 40
+	fidiv [dword @@temp]				;FPU STACK: (3/40)x^5|(1/6)*x^3
+	
+	
+	;fild [@@X]							;FPU STACK: x|(3/40)x^5|(1/6)*x^3
+	call gradientdistance 
+	fadd
+	fadd								;FPU STACK: x + (3/40)x^5 + (1/6)*x^3
+	
+	
+	;mov [@@temp], 100
+	;fild [dword ptr @@temp]				;FPU STACK: 3|x^5|(1/6)*x^3
+	;fimul [dword ptr @@temp]
+	
+	; fistp [dword ptr @@temp]         	; Store and pop last element from stack into the double word at the memory location pointed to by eax
+	; mov eax, [@@temp]
+	; xor ecx, ecx
+	; div ecx
+	
+	ret
+ENDP arcsine
+
+
 PROC collision
+	ARG 	@@X1:dword, @@Y1:dword, @@Size1:dword, @@X2:dword, @@Y2:dword, @@Width2:dword, @@Height2:dword, @@Active:dword 
 	USES eax
 	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
 	;mov [Colliding], 0			Not needed as if ther is no collision it will be put to 0
-	mov ecx, [Brick_Struct_Size]
-	neg ecx
-	collisionCheck:
-		add ecx, [Brick_Struct_Size]											; ecx = 0 is paddle so we need it if we dont decrease the last element is ecx = 1
-		
-		mov ebx, [edi + ecx + Brick.Width]
-		mov edx, [edi + ecx + Brick.Height]
-		; Collision with bricks and paddle is done with AABB (see more in the report)
-		;condition 1 for collision	
-		mov eax, [esi + Ball.x_Pos]			
-		add eax, [esi + Ball.Radius]		
-		add eax, [esi + Ball.Radius]									;maxX1 >= minX2
-		cmp eax, [edi + ecx + Brick.x_Pos]	;Ball_X + 2 * Ball_Size >= block_X
-		jl brickNotColliding  										;if there's no collision exit collision with block (jump if less)
-		
-		;condition 2 for collision
-		mov eax, [edi + ecx + Brick.x_Pos]	;initialize block_X in eax
-		add eax, ebx											;minX1 <= maxX2
-		cmp [esi + Ball.x_Pos], eax										;Ball_X <= block_X + block_Width									
-		jg brickNotColliding  										;if there's no collision exit collision with block (jump if greater)
-		
-		;condition 3 for collision
-		mov eax, [esi + Ball.y_Pos]			
-		add eax, [esi + Ball.Radius]		
-		add eax, [esi + Ball.Radius]									;maxY1 >= minY2
-		cmp eax, [edi + ecx + Brick.y_Pos]	;Ball_Y + 2 * Ball_Size >= block_Y
-		jl brickNotColliding  										;if there's no collision exit collision with block (jump if less)
-		
-		;condition 4 for collision
-		mov eax, [edi + ecx + Brick.y_Pos]	;initialize block_Y in eax		
-		add eax, edx											;minY1 <= maxY2
-		cmp [esi + Ball.y_Pos], eax										;Ball_Y <= block_Y + block_Height								
-		jg brickNotColliding  										;if there's no collision exit collision with block (jump if greater)
-		
-		mov eax, [edi + ecx + Brick.Active]								
-		cmp eax, 0												; Check the visibility (if the brick is already dead then there is no collision)
-		je brickNotColliding
-		
-		;Colliding
-		mov [Colliding], 1										; Store the state in the collision bool
-		ret
-		
-		brickNotColliding:
-		
-		mov eax, [Brick_Struct_Size]
-		xor edx, edx
-		imul [Level_Size]
-		
-		cmp ecx, eax
-		jle collisionCheck
-		;noCollision:
-		mov [Colliding], 0
-		ret
+
+											
+	
+	mov ebx, [@@Width2]
+	mov edx, [@@Height2]
+	; Collision with bricks and paddle is done with AABB (see more in the report)
+	;condition 1 for collision	
+	mov eax, [@@X1]			
+	add eax, [@@Size1]		
+	add eax, [@@Size1]									;maxX1 >= minX2
+	cmp eax, [@@X2]	;Ball_X + 2 * Ball_Size >= block_X
+	jl brickNotColliding  										;if there's no collision exit collision with block (jump if less)
+	
+	;condition 2 for collision
+	mov eax, [@@X2]	;initialize block_X in eax
+	add eax, ebx											;minX1 <= maxX2
+	cmp [@@X1], eax										;Ball_X <= block_X + block_Width									
+	jg brickNotColliding  										;if there's no collision exit collision with block (jump if greater)
+	
+	;condition 3 for collision
+	mov eax, [@@Y1]			
+	add eax, [@@Size1]		
+	add eax, [@@Size1]											;maxY1 >= minY2
+	cmp eax, [@@Y2]												;Ball_Y + 2 * Ball_Size >= block_Y
+	jl brickNotColliding  										;if there's no collision exit collision with block (jump if less)
+	
+	;condition 4 for collision
+	mov eax, [@@Y2]	;initialize block_Y in eax		
+	add eax, edx											;minY1 <= maxY2
+	cmp [@@Y1], eax										;Ball_Y <= block_Y + block_Height								
+	jg brickNotColliding  										;if there's no collision exit collision with block (jump if greater)
+	
+	mov eax, [@@Active]								
+	cmp eax, 0												; Check the visibility (if the brick is already dead then there is no collision)
+	je brickNotColliding
+	
+	;Colliding
+	mov [Colliding], 1										; Store the state in the collision bool
+	ret
+	
+	brickNotColliding:
+	;noCollision:
+	mov [Colliding], 0
+	ret
 ENDP collision
 ;---------------------------------------------------------------------
 ;	The following 2 procedures are written based on the algorithm described in https://stackoverflow.com/questions/3838329/how-can-i-check-if-two-segments-intersect
