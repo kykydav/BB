@@ -715,20 +715,20 @@ PROC updateBrick
 			mov edx, [edi + ecx + Brick.Hor_limR]
 			sub edx, [edi + ecx + Brick.Width]
 			cmp eax, edx
-			jge @@neg_VelX
+			jge short @@neg_VelX
 			
 			mov edx, [edi + ecx + Brick.Hor_limL]
 			cmp eax, edx
-			jle @@neg_VelX
+			jle short @@neg_VelX
 			
 			mov edx, [edi + ecx + Brick.Ver_limT]
 			cmp ebx, edx
-			jle @@neg_VelY
+			jle short @@neg_VelY
 			
 			mov edx, [edi + ecx + Brick.Ver_limB]
 			sub edx, [edi + ecx + Brick.Height]
 			cmp ebx, edx
-			jge @@neg_VelY
+			jge short @@neg_VelY
 			
 		@@Drawing:
 			mov edx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx	
@@ -840,9 +840,10 @@ PROC movePaddle
 	checkPaddleCollisionLeft:						; if we move the paddle to the left there will be collision from the left or none at all
 	cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
 	je exitPaddleMovement
-	call collision, 1								; check if the ball is colliding now (since the paddle movement)
+	;call collision, 1								; check if the ball is colliding now (since the paddle movement)
+	call collision,[esi + Ball.x_Pos],[esi + Ball.y_Pos],[esi + Ball.Radius],[edi + Brick.x_Pos],[edi + Brick.y_Pos],[edi + Brick.Width], [edi + Brick.Height], [edi + Brick.Active]
 	cmp [Colliding], 0
-	je short exitPaddleMovement							; if not exit
+	je exitPaddleMovement							; if not exit
 	call drawBall, [Black]							;remove the ball
 	mov ebx, [edi + Brick.x_Pos]					
 	sub ebx, [esi + Ball.Radius]
@@ -851,15 +852,13 @@ PROC movePaddle
 	mov [esi + Ball.x_Pos], ebx						;move the ball to Paddle_X - 2*Ball_Size (Remember Ball_Size = radius of the ball)
 	call drawBall, [White]      					;draw the ball
 	jmp short exitPaddleMovement
-	cmp [esi + Ball.x_Vel], 0						; check if the ball velocity needs to be changed
-	jl exitPaddleMovement
-	neg [esi + Ball.x_Vel]
-	jmp exitPaddleMovement
-	
+		
 	checkPaddleCollisionRigth:						; if we move the paddle to the rigth there will be collision from the rigth or none at all
 	cmp [Colliding], 1								; check if the ball is already colliding (before paddle movement) , if yes dont do a thing then 
-	je exitPaddleMovement
-	call collision, 1								; check if the ball is colliding now (since the paddle movement)
+	je short exitPaddleMovement
+	;call collision, 1								; check if the ball is colliding now (since the paddle movement)
+	call collision,[esi + Ball.x_Pos],[esi + Ball.y_Pos],[esi + Ball.Radius],[edi + Brick.x_Pos],[edi + Brick.y_Pos],[edi + Brick.Width], [edi + Brick.Height], [edi + Brick.Active]
+
 	cmp [Colliding], 0
 	je exitPaddleMovement							; if not exit
 	
@@ -1632,7 +1631,7 @@ DATASEG
 
 	;Game Constatnt
 	;Speed_Constant dd 9                        	; Variable used for making game slower if speed is smaller than this then it will be same as speed =0 because the division is rounded to 0
-	Scaling_Factor dd 1
+	Scaling_Factor dd 4
 	Exit_Game db 0							; Exiting Boolean
 	Colliding db 0							; Colliding Boolean
 	Skip_GUI db 0
@@ -1668,7 +1667,7 @@ DATASEG
 	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
 	
 
-	game_ball Ball <157, 97, 1, -1, 3>
+	game_ball Ball <157, 97, 16, -12, 3>
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
