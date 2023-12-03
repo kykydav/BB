@@ -128,21 +128,34 @@ ENDP fillRectangle
 
 PROC drawBall
 	ARG @@col:dword
+	LOCAL @@temp:dword
 	USES eax, ebx, ecx, edx
 
 	lea esi, [game_ball]			; Load effective adress of the game_ball array with the Ball struct into esi
 	
-	mov eax, [esi + Ball.x_Pos]		; Initialize the x posiition of the ball into eax
-	mov ebx, [esi + Ball.y_Pos]		; Initialize the y position of the ball into ebx
-	mov ecx, [esi + Ball.Radius]
+	
+	call scaleDown, [esi + Ball.Radius]    
+	mov ecx, eax
+	
 	mov edx, [esi + Ball.Radius]
 	add edx, [esi + Ball.Radius]
+	call scaleDown, edx    
+	mov edx, eax
+	
+	call scaleDown, [esi + Ball.y_Pos]		; Initialize the y position of the ball into ebx
+	mov ebx, eax
+	
+	call scaleDown, [esi + Ball.x_Pos] 
+	
 
 	; Update the registers to draw the rest of the rectangles
 	drawball:
 		call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]		; Call the drawRectangle procedure using the color as an argument
-		
-		cmp edx, [esi + Ball.Radius]	; Check to see if the ball is drawn
+		push eax
+		call scaleDown, [esi + Ball.Radius]
+		mov [@@temp], eax
+		pop eax
+		cmp edx, [@@temp]	; Check to see if the ball is drawn
 		jle done						; Jump is lower or equal to done to end the procedure
 		
 		; Update the new values for the next rectangle to draw the ball
@@ -162,10 +175,14 @@ PROC drawPaddle
 	ARG @@col:dword
 	USES eax, ebx, ecx, edx
 	
-	mov eax, [edi + Brick.x_Pos]    ; x-coordinate Paddle
-	mov ebx, [edi + Brick.y_Pos]    ; y-coordinate Paddle
-	mov ecx, [edi + Brick.Width]	; Width of the Paddle
-	mov edx, [edi + Brick.Height]	; Height of the Paddle
+	call scaleDown, [edi + Brick.Width]    ; Width of the Paddle
+	mov ecx, eax
+	call scaleDown, [edi + Brick.Height]    ; Height of the Paddle
+	mov edx, eax
+	
+	call scaleDown, [edi + Brick.y_Pos]    ; y-coordinate Paddle
+	mov ebx, eax
+	call scaleDown, [edi + Brick.x_Pos]    ; x-coordinate Paddle
 	
 	call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]
 	
@@ -200,6 +217,7 @@ PROC moveBall
 	jle negVelocityX					; If the ball hits left border, negate x velocity
 
 	mov eax, SCRWIDTH
+	call scaleUp, eax
 	sub eax, [esi + Ball.Radius]
 	sub eax, [esi + Ball.Radius]
 	sub eax, [esi + Ball.Radius]
@@ -212,6 +230,7 @@ PROC moveBall
 	jle negVelocityY					; If the ball hits upper border, negate x velocity
 
 	mov eax, SCRHEIGHT
+	call scaleUp, eax
 	sub eax, [esi + Ball.Radius]
 	
 	cmp [esi + Ball.y_Pos], eax
@@ -643,6 +662,7 @@ ENDP intersect
 
 PROC updateBrick
 	ARG @@type:dword, @@hitbrick:dword
+	LOCAL @@temp1: dword , @@temp2: dword
 	; ecx, esi and edi already defined before function call
 	; ecx equals the brick index
 	; esi equals game_ball Array pointer
@@ -662,11 +682,23 @@ PROC updateBrick
 	sub [edi + ecx + Brick.Color], 1		; Subtract 1 from the color index of the bricks to show damage
 	
 	@@Brick_update:	
-		mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
-		mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
+		
 		mov edx, 0
 		
-		call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], 0, edx
+		
+		call scaleDown, [edi + ecx + Brick.Width]
+		mov [@@temp1], eax
+		
+		call scaleDown, [edi + ecx + Brick.Height]
+		mov [@@temp2], eax
+		
+        call scaleDown, [edi + ecx + Brick.y_Pos]    ; Initialize the y-coordinate of the brick into ebx
+		mov ebx, eax
+		call scaleDown, [edi + ecx + Brick.x_Pos]    ; Initialize the x-coordinate of the brick into eax
+		
+		mov edx, 0									  ; color black to erase
+		
+        call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx
 		
 		mov eax, [edi + ecx + Brick.x_Vel]
 		add [edi + ecx + Brick.x_Pos], eax
@@ -707,7 +739,17 @@ PROC updateBrick
 			mov [edi + ecx + Brick.Active], 0				; Set the Brick interactability to zero, so the brick is not interactable
 			
 			@@draw: 
-				call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], 0, edx		; Drawning the brick in the new color
+				call scaleDown, [edi + ecx + Brick.Width]
+				mov [@@temp1], eax
+		
+				call scaleDown, [edi + ecx + Brick.Height]
+				mov [@@temp2], eax
+		
+				call scaleDown, [edi + ecx + Brick.y_Pos]    ; Initialize the y-coordinate of the brick into ebx
+				mov ebx, eax
+				call scaleDown, [edi + ecx + Brick.x_Pos]    ; Initialize the x-coordinate of the brick into eax
+				
+				call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx		; Drawning the brick in the new color
 			
 			jmp @@next
 			
@@ -762,7 +804,7 @@ PROC movePaddle
 		ret
 		
 	movePaddleLeft:
-		mov eax, [edi + Brick.x_Vel]
+		call scaleUp, [edi + Brick.x_Vel]
 		sub [edi + Brick.x_Pos], eax
 		
 		xor eax, eax						; faster than mov eax,0
@@ -776,10 +818,13 @@ PROC movePaddle
 
 	movePaddleRight:
 		mov eax, [edi + Brick.x_Vel]
+		call scaleUp, [edi + Brick.x_Vel]
 		add [edi + Brick.x_Pos], eax
 
 		mov eax, SCRWIDTH				; has to change depending on how we draw paddle and testing
+		call scaleUp, eax
 		sub eax, [edi + Brick.Width]
+		
 		cmp [edi + Brick.x_Pos], eax
 		jg paddleLeftOfBorder
 		jmp short checkPaddleCollisionRigth
@@ -834,16 +879,27 @@ ENDP movePaddle
 ; Draws the differen levels of the bricks
 PROC drawBricks
 	ARG @@Brick_Amount:dword
+	LOCAL @@temp1: dword , @@temp2: dword
     USES eax, ebx, ecx, edx
     
 	xor ecx, ecx
     
     brickloop:
-		mov eax, [edi + ecx + Brick.x_Pos]    ; x-coordinate
-        mov ebx, [edi + ecx + Brick.y_Pos]    ; y-coordinate 
+		
+		call scaleDown, [edi + ecx + Brick.Width]
+		;mov eax, [edi + ecx + Brick.Width]
+		mov [@@temp1], eax
+		
+		call scaleDown, [edi + ecx + Brick.Height]
+		mov [@@temp2], eax
+		
+        call scaleDown, [edi + ecx + Brick.y_Pos]    ; y-coordinate 
+		mov ebx, eax
+		call scaleDown, [edi + ecx + Brick.x_Pos]    ; x-coordinate
+		
 		mov edx, [edi + ecx + Brick.Color]	  ; color
 		
-        call drawRectangle, eax, ebx, [edi + ecx + Brick.Width], [edi + ecx + Brick.Height], 0, edx
+        call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx
         
 		add ecx, [Brick_Struct_Size]		; Add amount of bytes in Brick struct to move to next brick in level_bricks
 		
@@ -1241,9 +1297,11 @@ PROC initializeLevel
 	
 	looptest:
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.x_Pos], eax		; Assign the x_Pos value from the file into the Brick struct
 
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.y_Pos], eax		; Assign the y_Pos value from the file into the Brick struct
 
 		lodsd									; Loads a dword (4 byte) value into eax
@@ -1253,21 +1311,27 @@ PROC initializeLevel
 		mov [edi + ebx + Brick.y_Vel], eax		; Assign the y_Vel value from the file into the Brick struct
 
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.Width], eax		; Assign the Width value from the file into the Brick struct
 		
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.Height], eax		; Assign the Height value from the file into the Brick struct
 		
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.Hor_limL], eax	; Assign the moving horizontal left treshhold value from the file into the Brick struct
 		
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.Hor_limR], eax	; Assign the moving horizontal right treshhold value from the file into the Brick struct
 		
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.Ver_limB], eax	; Assign the moving vertical bottom treshhold value from the file into the Brick struct
 		
 		lodsd									; Loads a dword (4 byte) value into eax
+		call scaleUp, eax
 		mov [edi + ebx + Brick.Ver_limT], eax	; Assign the moving vertical top treshhold value from the file into the Brick struct
 		
 		lodsd									; Loads a word (2 byte) value into ax
@@ -1283,9 +1347,42 @@ PROC initializeLevel
 	call fillBackground, 0
 	call drawBricks, [@@Brick_Amount]
 	
+	;When initializing level also adjust ball to scale maybe hardcode this once we tested right
+	lea esi, [game_ball]
+	call scaleUp, [esi + Ball.x_Pos]
+	mov [esi + Ball.x_Pos],eax
+	
+	call scaleUp, [esi + Ball.y_Pos]
+	mov [esi + Ball.y_Pos],eax
+	
+	call scaleUp, [esi + Ball.Radius]    
+	mov [esi + Ball.Radius], eax
+	
 	ret
 
 ENDP initializeLevel
+PROC scaleUp
+	ARG @@X:dword
+	USES ecx
+	mov ecx, [Scaling_Factor]
+	mov eax, [@@X]
+	@@scaleup:
+		shl eax, 1
+		loop @@scaleup
+	ret	; eax
+ENDP scaleUp
+
+PROC scaleDown
+	ARG @@X:dword
+	USES ecx
+	mov ecx, [Scaling_Factor]
+	mov eax, [@@X]
+	@@scaledown:
+		shr eax, 1
+		loop @@scaledown
+	ret	; eax
+ENDP scaleDown
+
 
 ; PROC drawSprite
 	; ARG	 @@dataptr: dword, @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword
@@ -1534,7 +1631,8 @@ DATASEG
 	closeErrorMsg db "error during file closing", 13, 10, '$'
 
 	;Game Constatnt
-	Speed_Constant dd 9                        	; Variable used for making game slower if speed is smaller than this then it will be same as speed =0 because the division is rounded to 0
+	;Speed_Constant dd 9                        	; Variable used for making game slower if speed is smaller than this then it will be same as speed =0 because the division is rounded to 0
+	Scaling_Factor dd 1
 	Exit_Game db 0							; Exiting Boolean
 	Colliding db 0							; Colliding Boolean
 	Skip_GUI db 0
@@ -1568,6 +1666,8 @@ DATASEG
 	
 	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
 	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
+	
+
 	game_ball Ball <157, 97, 1, -1, 3>
 ; -------------------------------------------------------------------
 ; STACK
