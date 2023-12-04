@@ -21,6 +21,11 @@ SCRHEIGHT EQU 200	; screen height
 DATASIZE_Arrow EQU 25 * 25 ;bytes of data in file	
 DATASIZE_Bricks EQU 7200 ;bytes of data in file	
 DATASIZE_FS EQU SCRWIDTH * SCRHEIGHT
+DATASIZE_Powerup EQU 10 * 10
+
+; Random generator
+RAND_A = 1103515245
+RAND_C = 12345
 ; -------------------------------------------------------------------
 CODESEG
 
@@ -35,6 +40,56 @@ PROC setVideoMode
 	ret
 
 ENDP setVideoMode
+
+PROC rand_init
+    USES    eax, ecx, edx
+
+    mov     ah, 02ch        ; Get system time
+    int     21h
+
+    mov     ax, dx          ; Use time to generate seed in EAX
+    shl     eax, 16
+    mov     ax, cx
+
+    mov     ah, 02ah        ; Get system date
+    int     21h
+
+    shl     ecx, 16         ; Mangle date into the seed in EAX
+    mov     cx, dx
+    xor     eax, ecx
+    
+    mov     [rand_seed], eax
+
+    ret
+ENDP rand_init
+
+PROC rand
+	ARG @@limit:dword
+    USES    ebx, ecx, edx
+	
+	call rand_init
+	
+    mov     eax, [rand_seed]
+    mov     ecx, RAND_A
+    mul     ecx
+    add     eax, RAND_C
+    mov		ebx, eax
+	shr		ebx, 16
+	
+	mul		ecx
+	add     eax, RAND_C
+	
+	mov     [rand_seed], eax
+	mov		ax, bx
+	
+	xor edx, edx
+	mov ebx, [@@limit]
+	div ebx
+	
+	mov eax, edx
+
+    ret
+ENDP rand
 
 PROC drawRectangle
 	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@type:dword, @@col:byte   ; col = 15 is white
@@ -189,6 +244,135 @@ PROC drawPaddle
 	ret
 
 ENDP drawPaddle
+
+PROC movePowerup
+	LOCAL @@BrickX:dword, @@BrickY:dword, @@BrickW:dword, @@BrickH:dword
+	USES eax, edi
+	push edi
+	push esi
+	
+	lea edi, [powerups]
+	
+	xor esi, esi
+		
+	@@updatePowerup:
+		cmp [edi + esi + Powerup.Active], 0
+		je @@stillactive
+		
+		mov edx, [edi + esi + Powerup.Height]
+		; mov edx, eax
+		mov ecx, [edi + esi + Powerup.Width]
+		; mov ecx, eax
+		call scaleDown, [edi + esi + Powerup.y_Pos]
+		mov ebx, eax
+		call scaleDown, [edi + esi + Powerup.x_Pos]
+		; mov eax, [edi + esi + Powerup.x_Pos]
+		; mov ebx, [edi + esi + Powerup.y_Pos]
+		; mov ecx, [edi + esi + Powerup.Width]
+		; mov edx, [edi + esi + Powerup.Height]
+		
+		call fillRectangle, eax, ebx, ecx, edx, 0, 0, 0
+		
+		; mov eax, [@@index]
+		mov ebx, [edi + esi + Powerup.y_Vel]
+		add [edi + esi + Powerup.y_Pos], ebx
+		
+		; mov eax, [edi + esi + Powerup.x_Pos]
+		push eax
+		call scaleDown, [edi + esi + Powerup.y_Pos]
+		mov ebx, eax
+		pop eax
+		; mov ecx, [edi + esi + Powerup.Width]
+		; mov edx, [edi + esi + Powerup.Height]
+		
+		push ecx
+		mov ecx, [edi + esi + Powerup.Dataread]
+		call ReadFile, ecx, offset dataread_Powerup, DATASIZE_Powerup
+		pop ecx
+		call fillRectangle, eax, ebx, ecx, edx, 1, offset dataread_Powerup, 0
+		
+		; mov edx, [edi + esi + Powerup.Active]
+		
+		; pop esi
+		; pop edi
+		; push eax
+		; push ebx
+		; push ecx
+		; push edx
+		
+		; call scaleDown, [edi + Brick.x_Pos]
+		; mov [@@BrickX], eax
+		; call scaleDown, [edi + Brick.y_Pos]
+		; mov [@@BrickY], eax
+		; call scaleDown, [edi + Brick.Width]
+		; mov [@@BrickW], eax
+		; call scaleDown, [edi + Brick.Height]
+		; mov [@@BrickH], eax
+		
+		; mov eax, [edi + Brick.x_Pos]
+		; mov ebx, [edi + Brick.y_Pos]
+		; mov ecx, [edi + Brick.Width]
+		; mov edx, [edi + Brick.Height]
+		
+		
+		; mov [@@BrickY], ebx
+		; mov [@@BrickW], ecx
+		; mov [@@BrickH], edx
+		
+		; pop edx
+		; pop ecx
+		; pop ebx
+		; pop eax
+		
+		; call collision, eax, ebx, ecx, [@@BrickX], [@@BrickY], [@@BrickW], [@@BrickH], edx
+		
+		; push edi
+		; push esi
+		
+		; lea edi, [powerups]
+		
+		; cmp [edi + esi + Powerup.y_Pos], 640
+		; jle @@stillactive
+		
+		; cmp [Colliding], 1
+		; jne @@stillactive
+		
+		
+		; mov [edi + esi + Powerup.Active], 0
+		
+		; call fillRectangle, eax, ebx, ecx, edx, 0, 0, 0
+		; mov ebx, 0
+		; div ebx
+		call scaleDown, [edi + esi + Powerup.y_Pos]
+		cmp eax, 200
+		jle @@stillactive
+		
+		
+		; cmp [edi + esi + Powerup.Active], 0
+		; je @@stillactive
+		
+		mov [edi + esi + Powerup.Active], 0
+		
+		; call applyPowerup, esi, 1
+			
+		
+		@@stillactive:
+			add esi, [Powerup_Struct_Size]
+			
+			mov eax, [Powerup_Struct_Size]
+			mov ebx, [Powerup_Amount]
+			xor edx, edx
+			imul ebx
+			
+			cmp esi, eax
+			jl @@updatePowerup
+		
+	@@done:
+		pop esi
+		pop edi
+		ret
+	
+ENDP movePowerup
 
 PROC moveBall
 	; esi equals game_ball Array pointer
@@ -370,7 +554,14 @@ PROC moveBall
 		ret							; Needed otherwise go trough the rest of the procedure
 	
 	gameOver:
-		call terminateProcess			; pop pop is needed if not terminate in future
+		mov [Skip_GUI], 0
+		
+		call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
+		call fillBackground, 0
+		call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+		
+		ret
+		; call terminateProcess			; pop pop is needed if not terminate in future
 	
 	return:
 		ret
@@ -670,7 +861,7 @@ PROC updateBrick
 	USES eax, ebx, edx, ecx
 	mov ecx, [Brick_Struct_Size]
 	cmp [@@type], 1		; Update moving bricks
-	je @@Brick_update
+	je short @@Brick_update
 		
 	mov ecx, [@@hitbrick]
 	; xor edx, edx
@@ -679,7 +870,49 @@ PROC updateBrick
 	
 	; neg [edi + ecx + Brick.x_Vel]
 	
-	sub [edi + ecx + Brick.Color], 1		; Subtract 1 from the color index of the bricks to show damage
+	mov eax, [esi + Ball.Damage]
+	sub [edi + ecx + Brick.Color], eax		; Subtract 1 from the color index of the bricks to show damage
+	
+	cmp [edi + ecx + Brick.Color], 0
+	jg @@Brick_update
+	
+	call rand_init
+	call rand, 3
+	
+	cmp eax, 1
+	jne @@Brick_update
+	
+	@@random:
+		call rand, [Powerup_Amount]
+		; call rand, 6
+		mov ebx, [Powerup_Struct_Size]
+		xor edx, edx
+		imul ebx			
+		mov edx, eax
+		
+		push esi
+		
+		lea esi, [powerups]
+	
+		cmp [esi + edx + Powerup.Active], 1
+		je @@random
+	; cmp [esi + edx + Powerup.y_Pos], 200
+	; pop esi
+	; jg @@Brick_update
+	; push esi
+	
+	mov [esi + edx + Powerup.Active], 1
+
+	; call scaleDown, [edi + ecx + Brick.y_Pos]
+	; mov ebx, eax
+	; call scaleDown, [edi + ecx + Brick.x_Pos]
+	mov eax, [edi + ecx + Brick.x_Pos]
+	mov ebx, [edi + ecx + Brick.y_Pos]
+	
+	mov [esi + edx + Powerup.x_Pos], eax
+	mov [esi + edx + Powerup.y_Pos], ebx
+	
+	pop esi
 	
 	@@Brick_update:	
 		
@@ -913,6 +1146,81 @@ PROC drawBricks
     ret
 
 ENDP drawBricks
+
+PROC applyPowerup
+	ARG @@Powerup:dword, @@type:dword
+	LOCAL @@speed:dword, @@damage:dword, @@sizepaddle:dword
+	USES eax, ebx, ecx, edx
+	
+	lea eax, [powerups]
+	mov ebx, [Powerup_Struct_Size]
+	xor edx, edx
+	mov ecx, [@@Powerup]
+	imul ecx, ebx
+	
+	
+	cmp [@@type], 1			; 0 for Powerup and 1 for Powerdown
+	je @@Powerdown
+	
+	mov ebx, [eax + ecx + powerups.Speedmultiply]
+	mov [@@speed], ebx
+	mov ebx, [eax + ecx + powerups.Damagemultiply]
+	mov [@@damage], ebx
+	; mov amount, [eax + ecx + Powerups.Ball_amount]
+	mov ebx, [eax + ecx + powerups.Sizemultiply]
+	mov [@@sizepaddle], ebx
+	
+	xor ebx, ebx
+	xor edx, edx
+	@@balls_up:
+		imul [esi + ebx + Ball.x_Vel], [@@speed]
+		imul [esi + ebx + Ball.y_Vel], [@@speed]
+		imul [esi + ebx + Ball.Damage], [@@damage]
+		ret
+		; add ebx, [Ball_Struct_Size]
+		
+		; mov eax, [Ball_Amount]
+		; mov ecx, [Ball_Struct_Size]
+		; xor edx, edx
+		; imul ecx
+		
+		; cmp ebx, ecx
+		; jle @@balls_up
+	
+	@@paddle_up:
+		imul [edi + Brick.Width], [@@sizepaddle]
+		ret
+	
+	@@Powerdown:
+	
+		@@balls_down:
+			mov eax, [esi + Ball.x_Vel]
+			mov ecx, [@@speed]
+			div ecx
+			mov [esi + Ball.x_Vel], eax
+			
+			mov eax, [esi + Ball.y_Vel]
+			div ecx
+			mov [esi + Ball.y_Vel], eax
+			ret
+	; add ebx, [Ball_Struct_Size]
+		
+		; mov eax, [Ball_Amount]
+		; mov ecx, [Ball_Struct_Size]
+		; xor edx, edx
+		; imul ecx
+		
+		; cmp ebx, ecx
+		; jle @@balls_down
+	
+		@@paddle_down:
+			mov eax, [edi + Brick.Width]
+			mov ecx, [@@sizepaddle]
+			div ecx
+			mov [edi + Brick.Width], eax
+			ret
+
+ENDP applyPowerup
 
 ; PROC GUI
 	; Not all levels are created, this is a temporary procedure
@@ -1216,12 +1524,14 @@ PROC checkSprite
 		@@level1:
 			call ReadFile, offset level1, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 41
+			call initializePowerup, [Powerup_Amount]
 			
 			ret
 		
 		@@level2:
 			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 2
+			call initializePowerup, [Powerup_Amount]
 			
 			ret
 		
@@ -1360,6 +1670,81 @@ PROC initializeLevel
 	ret
 
 ENDP initializeLevel
+
+PROC initializePowerup
+	ARG @@Powerup_Amount:dword
+	USES eax, edi
+	push edi
+	
+	lea edi, [powerups]
+	xor ecx, ecx
+	
+	call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+	
+	@@initialize:
+		; call ReadFile, offset instabr, offset dataread_Powerup, DATASIZE_Powerup
+		mov ebx, offset instabr
+		mov [edi + ecx + Powerup.Dataread], ebx			
+		add ecx, [Powerup_Struct_Size]
+		
+		; call ReadFile, offset bigpad, offset dataread_Powerup, DATASIZE_Powerup
+		mov ebx, offset bigpad
+		mov [edi + ecx + Powerup.Dataread], ebx
+		add ecx, [Powerup_Struct_Size]
+	
+		; call ReadFile, offset morebal, offset dataread_Powerup, DATASIZE_Powerup
+		mov ebx, offset morebal
+		mov [edi + ecx + Powerup.Dataread], ebx
+		add ecx, [Powerup_Struct_Size]
+		
+		; call ReadFile, offset fastbal, offset dataread_Powerup, DATASIZE_Powerup
+		mov ebx, offset fastbal
+		mov [edi + ecx + Powerup.Dataread], ebx
+		add ecx, [Powerup_Struct_Size]
+		
+		; call ReadFile, offset smallpad, offset dataread_Powerup, DATASIZE_Powerup
+		mov ebx, offset smallpad
+		mov [edi + ecx + Powerup.Dataread], ebx
+		add ecx, [Powerup_Struct_Size]
+		
+		; call ReadFile, offset slowbal, offset dataread_Powerup, DATASIZE_Powerup
+		mov ebx, offset slowbal
+		mov [edi + ecx + Powerup.Dataread], ebx
+		add ecx, [Powerup_Struct_Size]
+		
+		mov eax, [Powerup_Struct_Size]
+		xor edx, edx
+		mov ebx, [@@Powerup_Amount]
+		imul ebx
+		
+		cmp ecx, eax
+		jle @@initialize
+		
+		xor ecx, ecx
+	@@loadvalues:
+		lodsd
+		mov [edi + ecx + Powerup.Speedmultiply], eax
+		lodsd
+		mov [edi + ecx + Powerup.Damagemultiply], eax 
+		lodsd
+		mov [edi + ecx + Powerup.Ball_amount], eax
+		lodsd
+		mov [edi + ecx + Powerup.Sizemultiply], eax
+		
+		add ecx, [Powerup_Struct_Size]
+		
+		mov eax, [Powerup_Struct_Size]
+		xor edx, edx
+		mov ebx, [@@Powerup_Amount]
+		imul ebx
+		
+		cmp ecx, eax
+		jl @@loadvalues
+		
+	pop edi
+	ret
+ENDP initializePowerup
+
 PROC scaleUp
 	ARG @@X:dword
 	USES ecx
@@ -1520,18 +1905,24 @@ STRUC Ball
 	x_Vel dd ?		; x-velocity
 	y_Vel dd ?		; y-velocity
 	Radius dd ?		; Ball radius
-	; Color dw ?		; Ball Color
-; total 22 bytes per Ball
+	Damage dd ?		; Ball damage
+; total 24 bytes per Ball
 ENDS Ball
 	
-	; STRUC Sprites
-		; Width dd ?		; Sprite Width
-		; Height dd ?		; Sprite Height
-		; DATASIZE dd ?	; DATASIZE
-		; Dataoffset dd ?	; Data offset
-	; total 16 bytes per Sprite
-	; ENDS Sprites
-
+STRUC Powerup
+	x_Pos dd ?			; x-position
+	y_Pos dd ?			; y-position
+	y_Vel dd ?			; y-velcoity
+	Width dd ?			; width
+	Height dd ?			; height
+	Speedmultiply dd ?	; ball speed multiplyer
+	Damagemultiply dd ? ; ball damage multiplyer
+	Ball_amount dd ?	; amount of balls
+	Sizemultiply dd ?	; paddle size multiplyer
+	Dataread dd ? 		; Dataread of sprite
+	Active dd ?			; Activity of powerup
+; total 44 bytes per Powerup/Powerdown
+ENDS Powerup
 
 ; wait for @@framecount frames
 proc wait_VBLANK
@@ -1593,9 +1984,14 @@ PROC main
 		; call setVideoMode, 13h
 		call drawBall, [Black]		;remove the ball
 		call moveBall               ;move the ball
+		
+		cmp [Skip_GUI], 0
+		je wait_frame
+		
 		call drawBall, [White]      ;draw the ball
 		
 		call updateBrick, 1, 0
+		call movePowerup
 		
 		; call setVideoMode, 13h
 		call drawPaddle, [Black] 	;remove the paddle			
@@ -1640,6 +2036,7 @@ DATASEG
 	White dd 15
 	
 	index dd 0
+	rand_seed  dd ?
 	
 	d_ratio dd 0
 	d_hor dd 0
@@ -1647,27 +2044,35 @@ DATASEG
 	
 	; Struct size
 	Brick_Struct_Size dd 48
+	Powerup_Struct_Size dd 44
 	
 	;Level size
 	Level_Size dd 0
+	Powerup_Amount dd 30
 	
 	level1 db "level1.bin", 0
 	level2 db "level2.bin", 0
 	GUI db "GUI.bin", 0
 	Arrow db "Arrow.bin", 0
 	level_page	db "Levelgui.bin", 0
-	; GUI_1 db "GUI_1.bin", 0
-	; GUI_2 db "GUI_2.bin", 0
+	
+	powerups_file db "Powerups.bin", 0
+	smallpad db "smallpad.bin", 0
+	bigpad db "bigpad.bin", 0
+	morebal db "morebal.bin", 0
+	fastbal db "fastbal.bin", 0
+	slowbal db "slowbal.bin", 0
+	instabr db "instabr.bin", 0
 	
 	dataread_GUI db DATASIZE_FS dup (?)
 	dataread_Arrow db DATASIZE_Arrow dup (?)
 	dataread_Level db DATASIZE_Bricks dup (?)
+	dataread_Powerup db DATASIZE_Powerup dup (?)
 	
 	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
 	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
-	
-
-	game_ball Ball <157, 97, 16, -12, 3>
+	game_ball Ball <157, 97, 16, -12, 3, 4>
+	powerups Powerup 30 dup (<0, 0, 10, 10, 10, 0, 0, 0, 0, 0, 0>)
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
