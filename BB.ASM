@@ -13,6 +13,8 @@ P386
 MODEL FLAT, C
 ASSUME cs:_TEXT,ds:FLAT,es:FLAT,fs:FLAT,gs:FLAT
 
+INCLUDE "playwav.inc"
+
 ; compile-time constants (with macros)
 VMEMADR EQU 0A0000h	; video memory address
 SCRWIDTH EQU 320	; screen witdth
@@ -28,7 +30,7 @@ RAND_A = 1103515245
 RAND_C = 12345
 ; -------------------------------------------------------------------
 CODESEG
-
+call readChunk
 ; Set the video mode
 PROC setVideoMode
 	ARG @@mode:word
@@ -103,7 +105,7 @@ PROC drawRectangle
 
 	; Compute top left corner address
 	mov edi, VMEMADR
-	add edi, eax
+	add edi, eax 
 
 	; Plot the top horizontal edge.
 	mov edx, [@@w]	; store width in edx for later reuse
@@ -375,6 +377,7 @@ PROC movePowerup
 ENDP movePowerup
 
 PROC moveBall
+	LOCAL @@temp:dword, @@temp1:dword, @@brickIndex: dword
 	; esi equals game_ball Array pointer
 	; edi equals the level_bricks Array pointer
 	USES eax, ebx, ecx, edx
@@ -454,7 +457,7 @@ PROC moveBall
 	mov ebx, [edi + ecx + Brick.y_Pos]			; AY, BY (y coordinate of both block points)
 	pop edx										
 	add edx, eax								; Bx (x coordinate of Right block point) 
-	
+	mov [@@brickIndex], ecx
 	; Check where the ball hits the top of the blok	
 	;we assume that it is not possible to hit a side where the normal vector points in the direction of Vx
 	; (so if VY < 0 then can't hit the top side) 	
@@ -489,7 +492,7 @@ PROC moveBall
 		; From here on it intersects with top 
 		;pop eax
 		
-		cmp ecx, 0
+		cmp [@@brickIndex], 0
 		je short gradient	
 		jmp negVelocityY
 	
@@ -539,9 +542,34 @@ PROC moveBall
 		
 	;ret ; useless
 	gradient:
+		call arcsine
+		mov [@@temp], 2
+		fidiv [dword ptr @@temp]					;FPU STACK: 1/2 * arcsin(y)			
+		fcos										; cos(1/2 * arcsin(y))
+		mov eax, [Ball_Base_Vy]
+		mov [@@temp], eax
+		fild [dword ptr @@temp]         			; Store and pop last element from stack into the double word at the memory location pointed to by eax
+		fmul st(0),st(1)           					; FPU STACK: Vy_base * cos(1/2 * arcsin(y))
+		fabs
+		fistp [dword ptr @@temp]	
+		mov eax, [@@temp]
+		mov [esi + Ball.y_Vel], eax     			
 		
+		call arcsine
+		mov [@@temp], 2
+		fidiv [dword ptr @@temp]					;FPU STACK: 1/2 * arcsin(y)			
+		fsin										; cos(1/2 * arcsin(y))
+		mov eax, [Ball_Base_Vx]
+		mov [@@temp], eax
+		fild [dword ptr @@temp]         			; Store and pop last element from stack into the double word at the memory location pointed to by eax
+		fmul st(0),st(1)           					; FPU STACK: Vy_base * cos(1/2 * arcsin(y))
+		fistp [dword ptr @@temp]	
+		mov eax, [@@temp]
+		mov [esi + Ball.x_Vel], eax     			
 		
-			
+		; xor ebx, ebx
+		; div ebx
+		
 	negVelocityY:
 		neg [esi + Ball.y_Vel]   		; Reverse the vertical velocity of the ball
 		ret
@@ -626,8 +654,10 @@ PROC pow
 	ret									;The procedure returns on the stack
 ENDP pow	
 
+
 PROC arcsine
 	LOCAL @@temp:dword, @@temp1:dword
+	call gradientdistance 
 	call pow, 3					;FPU STACK: x^3
 	;mov  [@@temp], eax
 	;fild [dword ptr @@temp]				;FPU STACK: x^3
@@ -636,6 +666,7 @@ PROC arcsine
 	mov [@@temp], 6
 	fidiv [dword @@temp]				;FPU STACK: (1/6)*x^3
 	
+	call gradientdistance 
 	call pow, 5					;FPU STACK: x^5|(1/6)*x^3
 	;mov  [@@temp], eax
 	;fild [dword ptr @@temp]				;FPU STACK: x^5|(1/6)*x^3
@@ -1656,6 +1687,10 @@ PROC initializeLevel
 	call fillBackground, 0
 	call drawBricks, [@@Brick_Amount]
 	
+	mov eax, [edi + Brick.Width]
+	shl eax,2
+	mov [edi + Brick.Width], eax
+	
 	;When initializing level also adjust ball to scale maybe hardcode this once we tested right
 	lea esi, [game_ball]
 	call scaleUp, [esi + Ball.x_Pos]
@@ -2071,8 +2106,11 @@ DATASEG
 	
 	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
 	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
+	Ball_Base_Vx dd 24
+	Ball_Base_Vy dd -16
 	game_ball Ball <157, 97, 16, -12, 3, 4>
 	powerups Powerup 30 dup (<0, 0, 10, 10, 10, 0, 0, 0, 0, 0, 0>)
+	
 ; -------------------------------------------------------------------
 ; STACK
 ; -------------------------------------------------------------------
