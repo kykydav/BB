@@ -30,7 +30,7 @@ RAND_A = 1103515245
 RAND_C = 12345
 ; -------------------------------------------------------------------
 CODESEG
-call readChunk
+
 ; Set the video mode
 PROC setVideoMode
 	ARG @@mode:word
@@ -250,6 +250,17 @@ ENDP drawPaddle
 PROC movePowerup
 	LOCAL @@BrickX:dword, @@BrickY:dword, @@BrickW:dword, @@BrickH:dword
 	USES eax, edi
+	
+	mov eax, [edi + Brick.x_Pos]
+	mov [@@BrickX], eax
+	mov eax, [edi + Brick.y_Pos]
+	mov [@@BrickY], eax
+	mov eax, [edi + Brick.Width]
+	mov [@@BrickW], eax
+	mov eax, [edi + Brick.Height]
+	mov [@@BrickH], eax
+	
+	
 	push edi
 	push esi
 	
@@ -261,10 +272,8 @@ PROC movePowerup
 		cmp [edi + esi + Powerup.Active], 0
 		je @@stillactive
 		
-		mov edx, [edi + esi + Powerup.Height]
-		; mov edx, eax
-		mov ecx, [edi + esi + Powerup.Width]
-		; mov ecx, eax
+		call scaleDown, [edi + esi + Powerup.Height]
+		mov edx, eax
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		mov ebx, eax
 		call scaleDown, [edi + esi + Powerup.x_Pos]
@@ -273,7 +282,7 @@ PROC movePowerup
 		; mov ecx, [edi + esi + Powerup.Width]
 		; mov edx, [edi + esi + Powerup.Height]
 		
-		call fillRectangle, eax, ebx, ecx, edx, 0, 0, 0
+		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
 		
 		; mov eax, [@@index]
 		mov ebx, [edi + esi + Powerup.y_Vel]
@@ -287,11 +296,11 @@ PROC movePowerup
 		; mov ecx, [edi + esi + Powerup.Width]
 		; mov edx, [edi + esi + Powerup.Height]
 		
-		push ecx
+		;push ecx
 		mov ecx, [edi + esi + Powerup.Dataread]
 		call ReadFile, ecx, offset dataread_Powerup, DATASIZE_Powerup
-		pop ecx
-		call fillRectangle, eax, ebx, ecx, edx, 1, offset dataread_Powerup, 0
+		;pop ecx
+		call fillRectangle, eax, ebx, edx, edx, 1, offset dataread_Powerup, 0
 		
 		; mov edx, [edi + esi + Powerup.Active]
 		
@@ -325,9 +334,18 @@ PROC movePowerup
 		; pop ecx
 		; pop ebx
 		; pop eax
-		
-		; call collision, eax, ebx, ecx, [@@BrickX], [@@BrickY], [@@BrickW], [@@BrickH], edx
-		
+		mov ecx, [edi + esi + Powerup.Height]
+		shr ecx, 1 
+		;mov eax 
+		call collision, [edi + esi + Powerup.x_Pos], [edi + esi + Powerup.y_Pos], ecx, [@@BrickX], [@@BrickY], [@@BrickW], [@@BrickH], [edi + esi + Powerup.Active]
+		cmp [Colliding], 0
+		je @@checkBoundaries
+		;xor ebx, ebx
+		;div ebx
+		call applyPowerup
+		mov [edi + esi + Powerup.Active], 0
+		;call fillRectangle, eax, ebx, edx, edx, 1, offset dataread_Powerup, 0
+		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
 		; push edi
 		; push esi
 		
@@ -345,6 +363,7 @@ PROC movePowerup
 		; call fillRectangle, eax, ebx, ecx, edx, 0, 0, 0
 		; mov ebx, 0
 		; div ebx
+		@@checkBoundaries:
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		cmp eax, 200
 		jle @@stillactive
@@ -582,14 +601,10 @@ PROC moveBall
 		ret							; Needed otherwise go trough the rest of the procedure
 	
 	gameOver:
-		mov [Skip_GUI], 0
-		
-		call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
-		call fillBackground, 0
-		call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+		call backToMenu
 		
 		ret
-		; call terminateProcess			; pop pop is needed if not terminate in future
+		; call terminateProcess			
 	
 	return:
 		ret
@@ -1053,7 +1068,9 @@ PROC movePaddle
 		mov ah, 00h
 		int 16h
 
-		
+		cmp al, 65h
+		je @@exit
+				
 		;if it is 's' or 'S'  move left and 'd' or 'D' move right
 		cmp al, 73h 			; 's'
 		je movePaddleLeft
@@ -1136,9 +1153,19 @@ PROC movePaddle
 	neg [esi + Ball.x_Vel]
 	exitPaddleMovement:
 	ret
-
+	@@exit:
+	call backToMenu
+	ret
 ENDP movePaddle
+PROC backToMenu
+	mov [Skip_GUI], 0
+		
+	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
+	call fillBackground, 0
+	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+	ret
 
+ENDP backToMenu
 ; Draws the differen levels of the bricks
 PROC drawBricks
 	ARG @@Brick_Amount:dword
@@ -1889,6 +1916,26 @@ ENDP fillBackground
 ; ENDP printUnsignedInteger
 
 ; Wait for a specific keystroke.
+PROC checkForSpecificKeystroke
+	USES eax
+	
+	mov ah, 01h
+	int 16h
+	jz @@return
+
+	mov ah, 00h
+	int 16h
+
+	cmp al, 1B		;27 is ASCII code for 'ESC'
+	jne @@return
+
+	;mov ax, 03h
+	;int 10h
+	call terminateProcess
+	@@return:
+	ret
+
+ENDP checkForSpecificKeystroke
 PROC waitForSpecificKeystroke
 	USES eax
 	press_check3:
@@ -1999,17 +2046,22 @@ PROC main
 	; call drawSprite, offset dataread_Arrow, 0, 0
 
 	@@update:                      			;time checking loop
+		;call checkForSpecificKeystroke					; keycode for ESC
 		; mov ah, 01h
 		; int 16h
+		;mov ah, 00h
+		;int 16h
+		
+		;if it is 's' or 'S'  move left and 'd' or 'D' move right
+		;cmp al, 73h 			; 's'
+		;je movePaddleLeft
+		
 
-		; mov ah, 00h
-		; int 16h
+		cmp al, 65h		;27 is ASCII code for 'ESC'
+		je exitGame
 
-		; cmp al, 27		;27 is ASCII code for 'ESC'
-		; je exitGame
-
-		mov ah,2Ch 								;get the system time
-		int 21h    								;ch = hour cl = minute dh = second dl = 1/100 seconds
+		;mov ah,2Ch 								;get the system time
+		;int 21h    								;ch = hour cl = minute dh = second dl = 1/100 seconds
 
 		call gui
 		
@@ -2032,6 +2084,8 @@ PROC main
 		call drawPaddle, [Black] 	;remove the paddle			
 		call movePaddle		        ;move the paddles (check for pressing of keys)
 		call drawPaddle, [White]   	;draw the paddles with the updated positions
+		
+		
 		
 		wait_frame:
 		call wait_VBLANK, 1
@@ -2109,7 +2163,7 @@ DATASEG
 	Ball_Base_Vx dd 24
 	Ball_Base_Vy dd -16
 	game_ball Ball <157, 97, 16, -12, 3, 4>
-	powerups Powerup 30 dup (<0, 0, 10, 10, 10, 0, 0, 0, 0, 0, 0>)
+	powerups Powerup 30 dup (<0, 0, 10, 160, 160, 0, 0, 0, 0, 0, 0>)
 	
 ; -------------------------------------------------------------------
 ; STACK
