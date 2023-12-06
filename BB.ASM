@@ -277,106 +277,43 @@ PROC movePowerup
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		mov ebx, eax
 		call scaleDown, [edi + esi + Powerup.x_Pos]
-		; mov eax, [edi + esi + Powerup.x_Pos]
-		; mov ebx, [edi + esi + Powerup.y_Pos]
-		; mov ecx, [edi + esi + Powerup.Width]
-		; mov edx, [edi + esi + Powerup.Height]
 		
 		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
 		
-		; mov eax, [@@index]
 		mov ebx, [edi + esi + Powerup.y_Vel]
 		add [edi + esi + Powerup.y_Pos], ebx
 		
-		; mov eax, [edi + esi + Powerup.x_Pos]
 		push eax
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		mov ebx, eax
 		pop eax
-		; mov ecx, [edi + esi + Powerup.Width]
-		; mov edx, [edi + esi + Powerup.Height]
-		
-		;push ecx
+
 		mov ecx, [edi + esi + Powerup.Dataread]
 		call ReadFile, ecx, offset dataread_Powerup, DATASIZE_Powerup
-		;pop ecx
 		call fillRectangle, eax, ebx, edx, edx, 1, offset dataread_Powerup, 0
 		
-		; mov edx, [edi + esi + Powerup.Active]
-		
-		; pop esi
-		; pop edi
-		; push eax
-		; push ebx
-		; push ecx
-		; push edx
-		
-		; call scaleDown, [edi + Brick.x_Pos]
-		; mov [@@BrickX], eax
-		; call scaleDown, [edi + Brick.y_Pos]
-		; mov [@@BrickY], eax
-		; call scaleDown, [edi + Brick.Width]
-		; mov [@@BrickW], eax
-		; call scaleDown, [edi + Brick.Height]
-		; mov [@@BrickH], eax
-		
-		; mov eax, [edi + Brick.x_Pos]
-		; mov ebx, [edi + Brick.y_Pos]
-		; mov ecx, [edi + Brick.Width]
-		; mov edx, [edi + Brick.Height]
-		
-		
-		; mov [@@BrickY], ebx
-		; mov [@@BrickW], ecx
-		; mov [@@BrickH], edx
-		
-		; pop edx
-		; pop ecx
-		; pop ebx
-		; pop eax
 		mov ecx, [edi + esi + Powerup.Height]
 		shr ecx, 1 
-		;mov eax 
+		
 		call collision, [edi + esi + Powerup.x_Pos], [edi + esi + Powerup.y_Pos], ecx, [@@BrickX], [@@BrickY], [@@BrickW], [@@BrickH], [edi + esi + Powerup.Active]
 		cmp [Colliding], 0
 		je @@checkBoundaries
-		;xor ebx, ebx
-		;div ebx
-		call applyPowerup
+		
 		mov [edi + esi + Powerup.Active], 0
-		;call fillRectangle, eax, ebx, edx, edx, 1, offset dataread_Powerup, 0
+		mov ecx, esi
+		
+		call applyPowerup, ecx, 0
+		mov esi, ecx
+		
 		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
-		; push edi
-		; push esi
 		
-		; lea edi, [powerups]
-		
-		; cmp [edi + esi + Powerup.y_Pos], 640
-		; jle @@stillactive
-		
-		; cmp [Colliding], 1
-		; jne @@stillactive
-		
-		
-		; mov [edi + esi + Powerup.Active], 0
-		
-		; call fillRectangle, eax, ebx, ecx, edx, 0, 0, 0
-		; mov ebx, 0
-		; div ebx
 		@@checkBoundaries:
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		cmp eax, 200
 		jle @@stillactive
 		
-		
-		; cmp [edi + esi + Powerup.Active], 0
-		; je @@stillactive
-		
 		mov [edi + esi + Powerup.Active], 0
-		
-		; call applyPowerup, esi, 1
 			
-		
 		@@stillactive:
 			add esi, [Powerup_Struct_Size]
 			
@@ -394,6 +331,95 @@ PROC movePowerup
 		ret
 	
 ENDP movePowerup
+
+PROC applyPowerup
+	ARG @@Powerup:dword, @@type:dword
+	LOCAL @@speed:dword, @@damage:dword, @@sizepaddle:dword
+	USES eax, ebx, ecx, edx, esi, edi
+	; push edi
+	; push esi
+	
+	lea edi, [powerups]
+	; lea esi, [game_ball]
+	
+	; mov ebx, [Powerup_Struct_Size]
+	; xor edx, edx
+	mov ecx, [@@Powerup]
+	; imul ecx, ebx
+	
+	mov ebx, [edi + ecx + Powerup.Speedmultiply]
+	mov [@@speed], ebx
+	
+	mov ebx, [edi + ecx + Powerup.Damagemultiply]
+	mov [@@damage], ebx
+	; mov amount, [eax + ecx + Powerups.Ball_amount]
+	mov ebx, [edi + ecx + Powerup.Sizemultiply]
+	mov [@@sizepaddle], ebx
+	
+	cmp [@@type], 1			; 0 for Powerup and 1 for Powerdown
+	je @@Powerdown
+	
+	; mov ebx, 0
+	; div ebx
+	; lea edi, [level_bricks]
+	; pop esi
+	; pop esi
+	; push esi
+	lea esi, [game_ball]
+	xor edx, edx
+	@@balls_up:
+		mov eax, [esi + Ball.x_Vel]
+		mov ebx, [@@speed]
+		imul ebx
+		mov [esi + Ball.x_Vel], eax
+		
+		mov eax, [esi + Ball.y_Vel]
+		mov ebx, [@@speed]
+		imul ebx
+		mov [esi + Ball.y_Vel], eax
+		
+		mov ebx, [@@damage]
+		mov [esi + Ball.Damage], ebx
+	
+	@@paddle_up:
+		lea edi, [level_bricks]
+		
+		mov eax, [edi + Brick.Width]
+		mov ebx, [@@sizepaddle]
+		imul ebx
+		mov [edi + Brick.Width], eax
+		ret
+	
+	@@Powerdown:
+	
+		@@balls_down:
+			mov eax, [esi + Ball.x_Vel]
+			mov ecx, [@@speed]
+			div ecx
+			mov [esi + Ball.x_Vel], eax
+			
+			mov eax, [esi + Ball.y_Vel]
+			div ecx
+			mov [esi + Ball.y_Vel], eax
+			ret
+	; add ebx, [Ball_Struct_Size]
+		
+		; mov eax, [Ball_Amount]
+		; mov ecx, [Ball_Struct_Size]
+		; xor edx, edx
+		; imul ecx
+		
+		; cmp ebx, ecx
+		; jle @@balls_down
+		pop edi
+		@@paddle_down:
+			mov eax, [edi + Brick.Width]
+			mov ecx, [@@sizepaddle]
+			div ecx
+			mov [edi + Brick.Width], eax
+			ret
+
+ENDP applyPowerup
 
 PROC moveBall
 	LOCAL @@temp:dword, @@temp1:dword, @@brickIndex: dword
@@ -713,7 +739,7 @@ ENDP arcsine
 
 PROC collision
 	ARG 	@@X1:dword, @@Y1:dword, @@Size1:dword, @@X2:dword, @@Y2:dword, @@Width2:dword, @@Height2:dword, @@Active:dword 
-	USES eax
+	USES eax, ebx, ecx, edx
 	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
 	;mov [Colliding], 0			Not needed as if ther is no collision it will be put to 0
 
@@ -906,6 +932,8 @@ PROC updateBrick
 	; edi equals level_bricks Array pointer
 	USES eax, ebx, edx, ecx
 	mov ecx, [Brick_Struct_Size]
+	lea esi, [game_ball]
+	lea edi, [level_bricks]
 	cmp [@@type], 1		; Update moving bricks
 	je short @@Brick_update
 		
@@ -917,17 +945,19 @@ PROC updateBrick
 	; neg [edi + ecx + Brick.x_Vel]
 	
 	mov eax, [esi + Ball.Damage]
-	sub [edi + ecx + Brick.Color], eax		; Subtract 1 from the color index of the bricks to show damage
+	sub [edi + ecx + Brick.Color], eax		; Subtract Damage from the color index of the bricks to show damage
 	
 	cmp [edi + ecx + Brick.Color], 0
 	jg @@Brick_update
 	
+	mov [edi + ecx + Brick.Color], 0
+	
 	call rand_init
-	call rand, 3
+	call rand, 1
 	
-	cmp eax, 1
+	cmp eax, 0
 	jne @@Brick_update
-	
+	push esi
 	@@random:
 		call rand, [Powerup_Amount]
 		; call rand, 6
@@ -935,8 +965,6 @@ PROC updateBrick
 		xor edx, edx
 		imul ebx			
 		mov edx, eax
-		
-		push esi
 		
 		lea esi, [powerups]
 	
@@ -948,7 +976,7 @@ PROC updateBrick
 	; push esi
 	
 	mov [esi + edx + Powerup.Active], 1
-
+	
 	; call scaleDown, [edi + ecx + Brick.y_Pos]
 	; mov ebx, eax
 	; call scaleDown, [edi + ecx + Brick.x_Pos]
@@ -963,7 +991,6 @@ PROC updateBrick
 	@@Brick_update:	
 		
 		mov edx, 0
-		
 		
 		call scaleDown, [edi + ecx + Brick.Width]
 		mov [@@temp1], eax
@@ -1157,6 +1184,7 @@ PROC movePaddle
 	call backToMenu
 	ret
 ENDP movePaddle
+
 PROC backToMenu
 	mov [Skip_GUI], 0
 		
@@ -1166,6 +1194,7 @@ PROC backToMenu
 	ret
 
 ENDP backToMenu
+
 ; Draws the differen levels of the bricks
 PROC drawBricks
 	ARG @@Brick_Amount:dword
@@ -1204,81 +1233,6 @@ PROC drawBricks
     ret
 
 ENDP drawBricks
-
-PROC applyPowerup
-	ARG @@Powerup:dword, @@type:dword
-	LOCAL @@speed:dword, @@damage:dword, @@sizepaddle:dword
-	USES eax, ebx, ecx, edx
-	
-	lea eax, [powerups]
-	mov ebx, [Powerup_Struct_Size]
-	xor edx, edx
-	mov ecx, [@@Powerup]
-	imul ecx, ebx
-	
-	
-	cmp [@@type], 1			; 0 for Powerup and 1 for Powerdown
-	je @@Powerdown
-	
-	mov ebx, [eax + ecx + powerups.Speedmultiply]
-	mov [@@speed], ebx
-	mov ebx, [eax + ecx + powerups.Damagemultiply]
-	mov [@@damage], ebx
-	; mov amount, [eax + ecx + Powerups.Ball_amount]
-	mov ebx, [eax + ecx + powerups.Sizemultiply]
-	mov [@@sizepaddle], ebx
-	
-	xor ebx, ebx
-	xor edx, edx
-	@@balls_up:
-		imul [esi + ebx + Ball.x_Vel], [@@speed]
-		imul [esi + ebx + Ball.y_Vel], [@@speed]
-		imul [esi + ebx + Ball.Damage], [@@damage]
-		ret
-		; add ebx, [Ball_Struct_Size]
-		
-		; mov eax, [Ball_Amount]
-		; mov ecx, [Ball_Struct_Size]
-		; xor edx, edx
-		; imul ecx
-		
-		; cmp ebx, ecx
-		; jle @@balls_up
-	
-	@@paddle_up:
-		imul [edi + Brick.Width], [@@sizepaddle]
-		ret
-	
-	@@Powerdown:
-	
-		@@balls_down:
-			mov eax, [esi + Ball.x_Vel]
-			mov ecx, [@@speed]
-			div ecx
-			mov [esi + Ball.x_Vel], eax
-			
-			mov eax, [esi + Ball.y_Vel]
-			div ecx
-			mov [esi + Ball.y_Vel], eax
-			ret
-	; add ebx, [Ball_Struct_Size]
-		
-		; mov eax, [Ball_Amount]
-		; mov ecx, [Ball_Struct_Size]
-		; xor edx, edx
-		; imul ecx
-		
-		; cmp ebx, ecx
-		; jle @@balls_down
-	
-		@@paddle_down:
-			mov eax, [edi + Brick.Width]
-			mov ecx, [@@sizepaddle]
-			div ecx
-			mov [edi + Brick.Width], eax
-			ret
-
-ENDP applyPowerup
 
 ; PROC GUI
 	; Not all levels are created, this is a temporary procedure
@@ -1582,14 +1536,16 @@ PROC checkSprite
 		@@level1:
 			call ReadFile, offset level1, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 41
-			call initializePowerup, [Powerup_Amount]
+			call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
 			
 			ret
 		
 		@@level2:
 			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 2
-			call initializePowerup, [Powerup_Amount]
+			call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
 			
 			ret
 		
@@ -1734,14 +1690,13 @@ PROC initializeLevel
 ENDP initializeLevel
 
 PROC initializePowerup
-	ARG @@Powerup_Amount:dword
-	USES eax, edi
-	push edi
+	ARG @@dataptr:dword, @@Powerup_Amount:dword
+	LOCAL @@temp1:dword, @@temp2:dword
+	USES eax, ebx, ecx, edx, edi
 	
+	mov esi, [@@dataptr]
 	lea edi, [powerups]
 	xor ecx, ecx
-	
-	call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
 	
 	@@initialize:
 		; call ReadFile, offset instabr, offset dataread_Powerup, DATASIZE_Powerup
@@ -1782,28 +1737,50 @@ PROC initializePowerup
 		cmp ecx, eax
 		jle @@initialize
 		
-		xor ecx, ecx
+	
+	
+	mov eax, [Powerup_Struct_Size]
+	xor edx, edx
+	mov ebx, 6
+	imul ebx
+	mov edx, eax
+	
+	; mov eax, [Powerup_Struct_Size]
+	; xor edx, edx
+	; mov ebx, [@@Powerup_Amount]
+	; imul ebx
+	; mov ebx, eax
+	
+	lea edi, [powerups]
+	
+	mov [@@temp2], 0
+	xor ecx, ecx
 	@@loadvalues:
-		lodsd
-		mov [edi + ecx + Powerup.Speedmultiply], eax
-		lodsd
-		mov [edi + ecx + Powerup.Damagemultiply], eax 
-		lodsd
-		mov [edi + ecx + Powerup.Ball_amount], eax
-		lodsd
-		mov [edi + ecx + Powerup.Sizemultiply], eax
+		call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+		mov esi, offset dataread_Powerup
+		mov [@@temp1], 0
 		
-		add ecx, [Powerup_Struct_Size]
-		
-		mov eax, [Powerup_Struct_Size]
-		xor edx, edx
-		mov ebx, [@@Powerup_Amount]
-		imul ebx
-		
-		cmp ecx, eax
-		jl @@loadvalues
-		
-	pop edi
+		@@Powerups:
+			lodsd
+			mov [edi + ecx + Powerup.Speedmultiply], eax
+			lodsd
+			mov [edi + ecx + Powerup.Damagemultiply], eax
+			lodsd
+			mov [edi + ecx + Powerup.Ball_amount], eax
+			lodsd
+			mov [edi + ecx + Powerup.Sizemultiply], eax
+			
+			add ecx, [Powerup_Struct_Size]
+			inc [@@temp1]
+			
+			cmp [@@temp1], 6
+			jl @@Powerups
+			
+			inc [@@temp2]
+			
+			cmp [@@temp2], 5
+			jl @@loadvalues
+	
 	ret
 ENDP initializePowerup
 
@@ -2079,6 +2056,7 @@ PROC main
 		
 		call updateBrick, 1, 0
 		call movePowerup
+	
 		
 		; call setVideoMode, 13h
 		call drawPaddle, [Black] 	;remove the paddle			
@@ -2162,8 +2140,8 @@ DATASEG
 	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
 	Ball_Base_Vx dd 24
 	Ball_Base_Vy dd -16
-	game_ball Ball <157, 97, 16, -12, 3, 4>
-	powerups Powerup 30 dup (<0, 0, 10, 160, 160, 0, 0, 0, 0, 0, 0>)
+	game_ball Ball 1 dup (<157, 97, 16, -12, 3, 1>)
+	powerups Powerup 30 dup (<0, 0, 10, 160, 160, 1, 1, 1, 1, 0, 0>)
 	
 ; -------------------------------------------------------------------
 ; STACK
