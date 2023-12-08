@@ -300,12 +300,27 @@ PROC movePowerup
 		je @@checkBoundaries
 		
 		mov [edi + esi + Powerup.Active], 0
+		mov [edi + esi + Powerup.Applied], 1
 		mov ecx, esi
 		
 		call applyPowerup, ecx, 0
-		mov esi, ecx
 		
 		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
+		mov esi, ecx
+		
+		call activateTimer
+			
+		; push edi
+		; push eax
+		; push ebx
+		; push ecx
+		; push edx
+		
+		; pop edx
+		; pop ecx
+		; pop ebx
+		; pop eax
+		; pop edi
 		
 		@@checkBoundaries:
 		call scaleDown, [edi + esi + Powerup.y_Pos]
@@ -487,7 +502,7 @@ PROC moveBall
 		cmp [Colliding], 0
 		je endMoveBall
 	@@collision:
-	
+	mov [Colliding], 0
 	;Check with border of the block is hit
 	push edx							;Stores Brick_Height
 	push ebx							;Stores Brick_Width
@@ -1806,6 +1821,51 @@ PROC scaleDown
 	ret	; eax
 ENDP scaleDown
 
+PROC GetSystemTime
+	mov ah, 2Ch        ; MS-DOS interrupt to get system time
+	int 21h
+
+	movzx eax, cl
+	; shl eax, 1
+	; movzx ebx, dl
+	; or eax, ebx
+
+	ret
+ENDP GetSystemTime
+
+PROC activateTimer
+	mov [timer_flag], 0
+
+	call GetSystemTime
+	mov [start_timer], eax
+	mov [timer_active], 1
+
+	ret
+ENDP activateTimer
+
+PROC checkTimer
+	ARG @@amount:dword
+	USES ebx
+
+	call GetSystemTime
+	sub eax, [start_timer]
+	mov [elapsed_time], eax
+
+	mov ebx, [@@amount]
+	cmp [elapsed_time], ebx
+	jge @@timerExpired
+
+	; Timer not expired - add your code here if needed
+
+	jmp @@exit
+
+	@@timerExpired:
+		mov [timer_flag], 1
+		mov eax, 1
+
+	@@exit:
+		ret
+ENDP checkTimer
 
 ; PROC drawSprite
 	; ARG	 @@dataptr: dword, @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword
@@ -1980,7 +2040,8 @@ STRUC Powerup
 	Sizemultiply dd ?	; paddle size multiplyer
 	Dataread dd ? 		; Dataread of sprite
 	Active dd ?			; Activity of powerup
-; total 44 bytes per Powerup/Powerdown
+	Applied dd ?		; If powerup applied or not
+; total 48 bytes per Powerup/Powerdown
 ENDS Powerup
 
 ; wait for @@framecount frames
@@ -2036,34 +2097,119 @@ PROC main
 
 		cmp al, 65h		;27 is ASCII code for 'ESC'
 		je exitGame
-
-		;mov ah,2Ch 								;get the system time
-		;int 21h    								;ch = hour cl = minute dh = second dl = 1/100 seconds
-
-		call gui
 		
-		cmp [Skip_GUI], 0
-		je wait_frame
+		; cmp [timer_flag], 
+		; je @@Powerupactive
+		cmp [timer_active], 0
+		je @@Powerupactive
 		
-		; call setVideoMode, 13h
-		call drawBall, [Black]		;remove the ball
-		call moveBall               ;move the ball
+		@@checktime:
+			; call GetSystemTime
+			call checkTimer, 1
+			cmp eax, 0
+			je @@Powerupactive
+			
+			; cmp [elapsed_time], 
+			
+			; cmp [timer_flag], 1
+			; je @@Powerupactive
+			
+			; mov eax, [elapsed_time]
+			; mov ebx, [current_time]
+			; cmp eax, ebx
+			; je @@Powerupactive
+			
+			; mov [current_time], eax
+			
+			; jmp @@Powerupactive
+			
+			@@Powerupinactive:
+			mov [timer_active], 0
+			lea edi, [level_bricks]
 		
-		cmp [Skip_GUI], 0
-		je wait_frame
+			call scaleDown, [edi + Brick.Height]
+			mov edx, eax
+			call scaleDown, [edi + Brick.Width]
+			mov ecx, eax
+			call scaleDown, [edi + Brick.y_Pos]
+			mov ebx, eax
+			call scaleDown, [edi + Brick.x_Pos]
+			
+			call drawRectangle, eax, ebx, ecx, edx, 0, 0
+			call scaleUp, 25
+			mov [edi + Brick.Width], eax
+			
+			; mov ebx, 0
+			; div ebx
+		; call activateTimer
 		
-		call drawBall, [White]      ;draw the ball
-		
-		call updateBrick, 1, 0
-		call movePowerup
-	
-		
-		; call setVideoMode, 13h
-		call drawPaddle, [Black] 	;remove the paddle			
-		call movePaddle		        ;move the paddles (check for pressing of keys)
-		call drawPaddle, [White]   	;draw the paddles with the updated positions
+		; call checkTimer
+		; test eax, eax
+		; jz @@Powerupactive
 		
 		
+		
+		; xor ecx, ecx
+		; xor edx, edx
+		
+		; @@Powerupinactive:
+			; lea esi, [game_ball]
+			; mov eax, [esi + Ball.x_Vel]
+			; mov ebx, [edi + ecx + Powerup.Speedmultiply]
+			; div ebx
+			; mov [esi + Ball.x_Vel], eax
+			
+			; mov eax, [esi + Ball.y_Vel]
+			; div ebx
+			; mov [esi + Ball.y_Vel], eax
+			
+			; call drawPaddle, [Black]
+			; lea esi, [level_bricks]
+			
+			; push edi
+			; lea edi, [powerups]
+			
+			; mov eax, [esi + Brick.Width]
+			; mov ebx, [edi + ecx + Powerup.Sizemultiply]
+			; mov ebx, 0
+			; div ebx
+			; mov [esi + Brick.Width], 25
+			
+			; add ecx, [Powerup_Struct_Size]
+			
+			; mov eax, [Powerup_Struct_Size]
+			; mov ebx, [Powerup_Amount]
+			; imul ebx
+			; pop edi
+			; cmp ecx, eax
+			; jl @@Powerupinactive
+			
+			
+			
+		@@Powerupactive:
+			call gui
+			
+			cmp [Skip_GUI], 0
+			je wait_frame
+			
+			call movePowerup
+			; call setVideoMode, 13h
+			call drawBall, [Black]		;remove the ball
+			call moveBall               ;move the ball
+			
+			cmp [Skip_GUI], 0
+			je wait_frame
+			
+			call drawBall, [White]      ;draw the ball
+			
+			call updateBrick, 1, 0
+			
+		
+			
+			; call setVideoMode, 13h
+			call drawPaddle, [Black] 	;remove the paddle			
+			call movePaddle		        ;move the paddles (check for pressing of keys)
+			call drawPaddle, [White]   	;draw the paddles with the updated positions
 		
 		wait_frame:
 		call wait_VBLANK, 1
@@ -2104,6 +2250,11 @@ DATASEG
 	
 	index dd 0
 	rand_seed  dd ?
+	timer_flag dd 0
+	start_timer dd 0
+	elapsed_time dd 0
+	current_time dd 0
+	timer_active dd 0
 	
 	d_ratio dd 0
 	d_hor dd 0
@@ -2111,7 +2262,7 @@ DATASEG
 	
 	; Struct size
 	Brick_Struct_Size dd 48
-	Powerup_Struct_Size dd 44
+	Powerup_Struct_Size dd 48
 	
 	;Level size
 	Level_Size dd 0
