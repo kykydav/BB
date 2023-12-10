@@ -982,7 +982,7 @@ PROC updateBrick
 	
 	@@Brick_update:	
 		
-		mov edx, 0
+		; mov edx, 0
 		
 		call scaleDown, [edi + ecx + Brick.Width]
 		mov [@@temp1], eax
@@ -1013,20 +1013,20 @@ PROC updateBrick
 			mov edx, [edi + ecx + Brick.Hor_limR]
 			sub edx, [edi + ecx + Brick.Width]
 			cmp eax, edx
-			jge short @@neg_VelX
+			jg short @@neg_VelX
 			
 			mov edx, [edi + ecx + Brick.Hor_limL]
 			cmp eax, edx
-			jle short @@neg_VelX
+			jl short @@neg_VelX
 			
 			mov edx, [edi + ecx + Brick.Ver_limT]
 			cmp ebx, edx
-			jle short @@neg_VelY
+			jl short @@neg_VelY
 			
 			mov edx, [edi + ecx + Brick.Ver_limB]
 			sub edx, [edi + ecx + Brick.Height]
 			cmp ebx, edx
-			jge short @@neg_VelY
+			jg short @@neg_VelY
 			
 		@@Drawing:
 			mov edx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx	
@@ -1064,10 +1064,10 @@ PROC updateBrick
 			
 			mov eax, [Brick_Struct_Size]
 			xor edx, edx
-			imul ecx, [Level_Size]
+			imul [Level_Size]
 			
 			cmp ecx, eax
-			jle @@Brick_update
+			jl @@Brick_update
 		
 	ret
 
@@ -1420,7 +1420,7 @@ PROC checkSprite
 		
 		@@level2:
 			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
-			call initializeLevel, offset dataread_Level, 2
+			call initializeLevel, offset dataread_Level, 37
 			call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
 			call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
 			
