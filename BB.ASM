@@ -21,8 +21,9 @@ SCRWIDTH EQU 320	; screen witdth
 SCRHEIGHT EQU 200	; screen height
 
 DATASIZE_Arrow EQU 25 * 25 ;bytes of data in file	
-DATASIZE_Bricks EQU 7200 ;bytes of data in file	
+DATASIZE_Bricks EQU 3000 ;bytes of data in file	
 DATASIZE_FS EQU SCRWIDTH * SCRHEIGHT
+DATASIZE_Ball EQU 24
 DATASIZE_Powerup EQU 10 * 10
 
 ; Random generator
@@ -421,7 +422,6 @@ PROC moveBall
 	
 	; lea esi, [game_ball]	; Load effective adress of game_ball struct array to esi
 	
-	
 	; Move ball according to the speed
 	mov eax, [esi + Ball.x_Pos]
 	add eax, [esi + Ball.x_Vel]
@@ -431,8 +431,6 @@ PROC moveBall
 	add eax, [esi + Ball.y_Vel]
 	mov [esi + Ball.y_Pos], eax			; Move in y direction (y_Pos + y_Vel * timestep)
 
-	
-	
 	; Check if it hits a border 
 	mov eax, [esi + Ball.Radius]
 	add eax, [esi + Ball.Radius]		; Right border + Ball_Diameter
@@ -1254,18 +1252,21 @@ PROC gui
 		je @@gui_1				; Jump if equal to level
 		
 		cmp al, 102				; 102 is ASCII code for 'f'
-		je short @@gui_2				; Jump if equal to endless
+		je @@gui_2				; Jump if equal to endless
 		
 		cmp al, 70				; 70 is ASCII code for 'F'
 		je @@gui_2				; Jump if equal to endless
 		
 		@@levelselect:	
+		
 			cmp al, 13				; 13 is ASCII code for 'Enter'
 			je @@enter_pressed		; Jump if equal to exit
 			
 			cmp ebx, 3
 			jne @@continue
 			
+			
+
 			cmp al, 115
 			je @@left
 			
@@ -1303,8 +1304,6 @@ PROC gui
 		
 		cmp ebx, 3
 		je @@press_check
-		
-		mov [Skip_GUI], 1
 		
 		ret		
 		
@@ -1394,6 +1393,7 @@ PROC checkSprite
 		call ReadFile, offset level_page, offset dataread_GUI, DATASIZE_FS
 		call fillRectangle, 0, 0, 320, 200, 0, 0, 0
 		call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+		call drawRectangle, 13, 61, 94, 60, 1, 2
 		
 		mov ebx, 3
 		
@@ -1402,27 +1402,42 @@ PROC checkSprite
 	@@level_initialize:
 		xor ebx, ebx
 		
+		call initializePowerup, [Powerup_Amount]
+		call initializeBall
+		
+		mov [Skip_GUI], 1
+		
 		cmp [index], 0
 		je @@level1
 		
 		cmp [index], 1
 		je @@level2
 		
+		cmp [index], 2
+		je @@level3
+		
 		ret
 		
 		@@level1:
 			call ReadFile, offset level1, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 41
-			call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
-			call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			
 			
 			ret
 		
 		@@level2:
 			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 37
-			call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
-			call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			; call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			
+			ret
+		
+		@@level3:
+			call ReadFile, offset level3, offset dataread_Level, DATASIZE_Bricks
+			call initializeLevel, offset dataread_Level, 52
+			; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			; call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
 			
 			ret
 		
@@ -1552,26 +1567,62 @@ PROC initializeLevel
 	; mov [edi + Brick.Width], eax
 	
 	;When initializing level also adjust ball to scale maybe hardcode this once we tested right
-	lea esi, [game_ball]
-	call scaleUp, [esi + Ball.x_Pos]
-	mov [esi + Ball.x_Pos],eax
+	; lea esi, [game_ball]
+	; call scaleUp, [esi + Ball.x_Pos]
+	; mov [esi + Ball.x_Pos],eax
 	
-	call scaleUp, [esi + Ball.y_Pos]
-	mov [esi + Ball.y_Pos],eax
+	; call scaleUp, [esi + Ball.y_Pos]
+	; mov [esi + Ball.y_Pos],eax
 	
-	call scaleUp, [esi + Ball.Radius]    
-	mov [esi + Ball.Radius], eax
+	; call scaleUp, [esi + Ball.Radius]    
+	; mov [esi + Ball.Radius], eax
 	
 	ret
 
 ENDP initializeLevel
 
+PROC initializeBall
+	; ARG @@dataptr:dword
+	USES eax, ebx, ecx, edx
+	
+	call ReadFile, offset ball, offset dataread_Ball, DATASIZE_Ball
+	
+	mov esi, offset dataread_Ball
+	lea edi, [game_ball]
+	
+	lodsd
+	call scaleUp, eax
+	mov [edi + Ball.x_Pos], eax
+	
+	lodsd
+	call scaleUp, eax
+	mov [edi + Ball.y_Pos], eax
+	
+	lodsd
+	mov [edi + Ball.x_Vel], eax
+	
+	lodsd
+	mov [edi + Ball.y_Vel], eax
+	
+	lodsd
+	call scaleUp, eax
+	mov [edi + Ball.Radius], eax
+	
+	lodsd
+	mov [edi + Ball.Damage], eax
+	
+	ret
+
+ENDP initializeBall
+
 PROC initializePowerup
-	ARG @@dataptr:dword, @@Powerup_Amount:dword
+	ARG @@Powerup_Amount:dword
 	LOCAL @@temp1:dword, @@temp2:dword
 	USES eax, ebx, ecx, edx, edi
 	
-	mov esi, [@@dataptr]
+	; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+	
+	mov esi, offset dataread_Powerup
 	lea edi, [powerups]
 	xor ecx, ecx
 	
@@ -1638,6 +1689,11 @@ PROC initializePowerup
 		mov [@@temp1], 0
 		
 		@@Powerups:
+			lodsd
+			mov [edi + ecx + Powerup.x_Pos], eax
+			mov [edi + ecx + Powerup.y_Pos], eax
+			mov [edi + ecx + Powerup.Active], eax
+			
 			lodsd
 			mov [edi + ecx + Powerup.Up_Down], eax
 			lodsd
@@ -1965,23 +2021,27 @@ PROC main
 			cmp [Skip_GUI], 0
 			je wait_frame
 			
+			call updateBrick, 1, 0
 			call movePowerup
+			
 			; call setVideoMode, 13h
 			call drawBall, [Black]		;remove the ball
 			call moveBall               ;move the ball
+			
+			call drawPaddle, [Black] 	;remove the paddle			
+			call movePaddle		        ;move the paddles (check for pressing of keys)
 			
 			cmp [Skip_GUI], 0
 			je wait_frame
 			
 			call drawBall, [White]      ;draw the ball
 			
-			call updateBrick, 1, 0
-			
-		
-			
 			; call setVideoMode, 13h
-			call drawPaddle, [Black] 	;remove the paddle			
-			call movePaddle		        ;move the paddles (check for pressing of keys)
+			
+			
+			; cmp [Skip_GUI], 0
+			; je wait_frame
+			
 			call drawPaddle, [White]   	;draw the paddles with the updated positions
 		
 		wait_frame:
@@ -2043,6 +2103,8 @@ DATASEG
 	
 	level1 db "level1.bin", 0
 	level2 db "level2.bin", 0
+	level3 db "level3.bin", 0
+	ball db "Ball.bin", 0
 	GUI db "GUI.bin", 0
 	Arrow db "Arrow.bin", 0
 	level_page	db "Levelgui.bin", 0
@@ -2058,13 +2120,14 @@ DATASEG
 	dataread_GUI db DATASIZE_FS dup (?)
 	dataread_Arrow db DATASIZE_Arrow dup (?)
 	dataread_Level db DATASIZE_Bricks dup (?)
+	dataread_Ball db DATASIZE_Ball dup (?)
 	dataread_Powerup db DATASIZE_Powerup dup (?)
 	
 	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
-	level_bricks Brick 150 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
+	level_bricks Brick 60 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
 	Ball_Base_Vx dd 24
 	Ball_Base_Vy dd -16
-	game_ball Ball 1 dup (<157, 97, 16, -12, 3, 1>)
+	game_ball Ball 1 dup (<0, 0, 0, 0, 0, 0>)
 	powerups Powerup 15 dup (<0, 0, 10, 160, 160, 1, 1, 1, 1, 0, 0, 0, 0>)
 	
 ; -------------------------------------------------------------------
