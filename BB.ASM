@@ -1252,7 +1252,7 @@ PROC gui
 		je @@gui_1				; Jump if equal to level
 		
 		cmp al, 102				; 102 is ASCII code for 'f'
-		je @@gui_2				; Jump if equal to endless
+		je short @@gui_2				; Jump if equal to endless
 		
 		cmp al, 70				; 70 is ASCII code for 'F'
 		je @@gui_2				; Jump if equal to endless
@@ -1941,7 +1941,7 @@ proc wait_VBLANK
 	movzx ecx, [@@framecount]
 	
 		@@VBlank_phase1:
-		in al, dx 
+		in al, dx
 		and al, 8
 		jnz @@VBlank_phase1
 		@@VBlank_phase2:
