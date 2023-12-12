@@ -1443,7 +1443,7 @@ PROC checkSprite
 		
 	@@exit_game:
 		call terminateProcess
-		
+		call stopMusic
 		ret
 		
 ENDP checkSprite
