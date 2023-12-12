@@ -1830,6 +1830,7 @@ PROC terminateProcess
 	call setVideoMode, 03h
 	mov	ax,04C00h
 	int 21h
+	call stopMusic
 	ret
 ENDP terminateProcess
 
@@ -1910,7 +1911,7 @@ PROC main
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
 	call fillBackground, 0
 	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
-	
+	call startMusic
 	
 
 	@@update:                      			;time checking loop
