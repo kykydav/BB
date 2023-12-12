@@ -1247,11 +1247,13 @@ PROC backToMenu
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
 	call fillBackground, 0
 	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+	call stopMusic
+	call startMusic, offset Menu
 	ret
 
 ENDP backToMenu
 
-; Draws the differen levels of the bricks
+; Draws the different levels of the bricks
 PROC drawBricks
 	; ARG @@Brick_Amount:dword
 	LOCAL @@temp1: dword , @@temp2: dword
@@ -1491,6 +1493,9 @@ PROC checkSprite
 		@@level1:
 			call ReadFile, offset level1, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 41
+			call stopMusic
+			call startMusic, offset LVL1
+
 
 			ret
 		
@@ -1498,13 +1503,24 @@ PROC checkSprite
 		@@level2:
 			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 37
-			
+
+			; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			; call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			call stopMusic
+			call startMusic, offset LVL2
+
 			ret
 		
 		; Initialize level 3
 		@@level3:
 			call ReadFile, offset level3, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 52
+
+			; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			; call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			call stopMusic
+			call startMusic, offset LVL3
+			
 
 			ret
 		
@@ -1863,9 +1879,11 @@ ENDP waitForSpecificKeystroke
 ; Terminate the program.
 PROC terminateProcess
 	USES eax
+	call stopMusic
 	call setVideoMode, 03h
 	mov	ax,04C00h
 	int 21h
+
 	ret
 ENDP terminateProcess
 
@@ -1946,6 +1964,8 @@ PROC main
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
 	call fillBackground, [Black]
 	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+	call startMusic, offset Menu
+
 	
 	@@update:                      			
 		call resetPowerup		;time checking and powerup reset
@@ -1979,7 +1999,7 @@ PROC main
     call waitForSpecificKeystroke, 001Bh 		; keycode for ESC
 	@@exitGame:
 		call terminateProcess
-
+		
 ENDP main
 ; -------------------------------------------------------------------
 DATASEG
@@ -2015,6 +2035,13 @@ DATASEG
 	d_ratio dd 0
 	d_hor dd 0
 	d_vert dd 0
+	
+	;SOUND
+	Menu db "MENU2.RAW", 0
+	LVL1 db "LVL1.RAW", 0
+	LVL2 db "LVL2.RAW", 0
+	LVL3 db "LVL3.RAW", 0
+
 	
 	; Struct size
 	Brick_Struct_Size dd 48

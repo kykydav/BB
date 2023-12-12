@@ -333,8 +333,9 @@ ENDP readMusicPiece
 ; -------------------------------------------------------------------
 
 PROC startMusic
+	ARG @@filename:dword
 	pushad
-	call openFile, offset sound_file
+	call openFile, [@@filename]
 	mov [sndhandle], ax
 
 	call reset_dsp	
@@ -365,7 +366,6 @@ ENDP stopMusic
 
 ; -------------------------------------------------------------------
 DATASEG
-	sound_file db "MENU2.RAW", 0
 	openErrorMsg db "File not found.", 13, 10, "Please read README.TXT for instructions", 13, 10, '$'
 	readErrorMsg db "Error during file reading", 13, 10, '$'
 	closeErrorMsg db "Error during file closing", 13, 10, '$'
