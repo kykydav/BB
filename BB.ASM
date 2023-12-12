@@ -44,7 +44,6 @@ PROC setVideoMode
 
 ENDP setVideoMode
 
-; Initializes the pseudo random generator
 PROC rand_init
     USES    eax, ecx, edx
 
@@ -67,7 +66,6 @@ PROC rand_init
     ret
 ENDP rand_init
 
-; Returns a pseudo random number
 PROC rand
 	ARG @@limit:dword
     USES    ebx, ecx, edx
@@ -87,21 +85,18 @@ PROC rand
 	mov     [rand_seed], eax
 	mov		ax, bx
 	
-	; Getting the rest value when dividing the random number with a chosen value
 	xor edx, edx
 	mov ebx, [@@limit]
 	div ebx
 	
-	; Values between 0 and @@limit - 1
 	mov eax, edx
 
     ret
 ENDP rand
 
-; Draws a rectangle on screen
 PROC drawRectangle
-	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@type:dword, @@col:byte
-	USES 	eax, ecx, edx
+	ARG 	@@x0:dword, @@y0:dword, @@w:dword, @@h:dword, @@type:dword, @@col:byte   ; col = 15 is white
+	USES 	eax, ecx, edx ; note: MUL uses edx!
 	push edi
 	; Compute the index of the rectangle's top left corner
 	mov eax, [@@y0]
@@ -140,19 +135,17 @@ PROC drawRectangle
 	je @@done
 	
 	movzx eax, [@@col]
-	call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], 0, 0, eax ; Filling the rectangle
+	call fillRectangle, [@@x0], [@@y0], [@@w], [@@h], 0, 0, eax
 	
 	@@done:
 		ret
 		
 ENDP drawRectangle
 
-; Filling a rectangle or drawing a sprite
 PROC fillRectangle
 	ARG @@x_Pos:dword, @@y_Pos:dword, @@Width:dword, @@Height:dword, @@type:dword, @@dataptr:dword, @@col:byte
 	USES eax, ebx, edx, esi, ecx
 	
-	; General part of the code to draw at a specific coordinate
 	push edi
 	mov eax, [@@y_Pos]
 	xor edx, edx
@@ -162,26 +155,22 @@ PROC fillRectangle
 	mov edi, VMEMADR
 	add edi, eax
 	
-	; Drawing the rectangle or sprite row per row
 	mov edx, [@@Height]
 	mov esi, [@@dataptr]
 	@@Check: 
 		cmp [@@type], 0			; 0 means Rectangle and 1 means Sprite
 		je @@drawRectangle
 		
-		; Draws the sprite
 		@@drawSprite:
 			mov ecx, [@@Width]
 			rep movsb
 			jmp @@drawloop
 			
-		; Draws the rectangle
 		@@drawRectangle:
 			mov al, [@@col]
 			mov ecx, [@@Width] 
 			rep stosb
 			
-		; Loop over each row to draw the full rectangle or sprite
 		@@drawloop:
 			add edi, SCRWIDTH
 			sub edi, [@@Width]
@@ -195,7 +184,6 @@ PROC fillRectangle
 
 ENDP fillRectangle
 
-; Drawing the ball
 PROC drawBall
 	ARG @@col:dword
 	LOCAL @@temp:dword
@@ -203,32 +191,30 @@ PROC drawBall
 
 	lea esi, [game_ball]			; Load effective adress of the game_ball array with the Ball struct into esi
 	
-	; Initialize width of the ball
-	call scaleDown, [esi + Ball.Radius]		; Scale the ball radius down before drawing
+	
+	call scaleDown, [esi + Ball.Radius]    
 	mov ecx, eax
 	
-	; Initialize height of the ball
 	mov edx, [esi + Ball.Radius]
 	add edx, [esi + Ball.Radius]
 	call scaleDown, edx    
 	mov edx, eax
 	
-	; Initialize coordinates of the ball
 	call scaleDown, [esi + Ball.y_Pos]		; Initialize the y position of the ball into ebx
 	mov ebx, eax
-	call scaleDown, [esi + Ball.x_Pos] 		; Initialize the x position of the ball into eax
 	
+	call scaleDown, [esi + Ball.x_Pos] 
+	
+
 	; Update the registers to draw the rest of the rectangles
-	@@drawball:
+	drawball:
 		call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]		; Call the drawRectangle procedure using the color as an argument
-		
-		; Check to see if the ball is drawn
 		push eax
 		call scaleDown, [esi + Ball.Radius]
 		mov [@@temp], eax
 		pop eax
-		cmp edx, [@@temp]	
-		jle @@done			; Jump is lower or equal to @@done to end the procedure
+		cmp edx, [@@temp]	; Check to see if the ball is drawn
+		jle done						; Jump is lower or equal to done to end the procedure
 		
 		; Update the new values for the next rectangle to draw the ball
 		sub eax, 1		
@@ -236,39 +222,36 @@ PROC drawBall
 		add ecx, 2
 		sub edx, 2
 
-		jmp @@drawball	; Jump to drawball until the ball is fully drawn
+		jmp drawball	; Jump to drawball until the ball is fully drawn
 
-	@@done:
+	done:
 		ret
 
 ENDP drawBall
 
-; Drawing the Paddle
 PROC drawPaddle
 	ARG @@col:dword
 	USES eax, ebx, ecx, edx
 	
-	call scaleDown, [edi + Brick.Width]    ; Initialize width of the Paddle into ecx
+	call scaleDown, [edi + Brick.Width]    ; Width of the Paddle
 	mov ecx, eax
-	call scaleDown, [edi + Brick.Height]   ; Initialize height of the Paddle into edx
+	call scaleDown, [edi + Brick.Height]    ; Height of the Paddle
 	mov edx, eax
 	
-	call scaleDown, [edi + Brick.y_Pos]    ; Initialize y-coordinate Paddle into ebx
+	call scaleDown, [edi + Brick.y_Pos]    ; y-coordinate Paddle
 	mov ebx, eax
-	call scaleDown, [edi + Brick.x_Pos]    ; Initialize x-coordinate Paddle into eax
+	call scaleDown, [edi + Brick.x_Pos]    ; x-coordinate Paddle
 	
-	call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]	; Drawing the Paddle
+	call drawRectangle, eax, ebx, ecx, edx, 0, [@@col]
 	
 	ret
 
 ENDP drawPaddle
 
-; Refreshing the movement of the powerups
 PROC movePowerup
 	LOCAL @@BrickX:dword, @@BrickY:dword, @@BrickW:dword, @@BrickH:dword
 	USES eax, edi
 	
-	; Load brick values into local variables for later use
 	mov eax, [edi + Brick.x_Pos]
 	mov [@@BrickX], eax
 	mov eax, [edi + Brick.y_Pos]
@@ -278,37 +261,34 @@ PROC movePowerup
 	mov eax, [edi + Brick.Height]
 	mov [@@BrickH], eax
 	
+	
 	push edi
 	push esi
 	
-	lea edi, [powerups]		; Load effective adress of the powerups struct array into edi
+	lea edi, [powerups]
 	
-	xor esi, esi	; Use edi as counter
+	xor esi, esi
 		
 	@@updatePowerup:
-		cmp [edi + esi + Powerup.Active], 0		; Check to see if the powerup is active
-		je @@notactive							; Jump is powerup not active to @@notactive
+		cmp [edi + esi + Powerup.Active], 0
+		je @@stillactive
 		
-		; Load powerup values into registers
-		call scaleDown, [edi + esi + Powerup.Height]	
+		call scaleDown, [edi + esi + Powerup.Height]
 		mov edx, eax
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		mov ebx, eax
 		call scaleDown, [edi + esi + Powerup.x_Pos]
 		
-		call fillRectangle, eax, ebx, edx, edx, 0, 0, [Black]		; Draw a black rectangle to coverup powerup before updating an redrawing
+		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
 		
-		; Updating the y coordinate to let the powerup "fall"
 		mov ebx, [edi + esi + Powerup.y_Vel]
 		add [edi + esi + Powerup.y_Pos], ebx
 		
-		; Scaling the y coorinate down to be able to draw
 		push eax
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		mov ebx, eax
 		pop eax
-		
-		; Reading the sprite file and drawing the sprite
+
 		mov ecx, [edi + esi + Powerup.Dataread]
 		call ReadFile, ecx, offset dataread_Powerup, DATASIZE_Powerup
 		call fillRectangle, eax, ebx, edx, edx, 1, offset dataread_Powerup, 0
@@ -316,38 +296,38 @@ PROC movePowerup
 		mov ecx, [edi + esi + Powerup.Height]
 		shr ecx, 1 
 		
-		; Checking Collision of the powerup with the paddle
 		call collision, [edi + esi + Powerup.x_Pos], [edi + esi + Powerup.y_Pos], ecx, [@@BrickX], [@@BrickY], [@@BrickW], [@@BrickH], [edi + esi + Powerup.Active]
 		cmp [Colliding], 0
 		je @@checkBoundaries
 		
-		; If collision occurs, then setting the powerup to inactive and applying it for one minute
 		mov [edi + esi + Powerup.Active], 0
 		mov [edi + esi + Powerup.Applied], 1
 		mov ecx, esi
 		
-		call applyPowerup, ecx, [edi + esi + Powerup.Up_Down]	; Updating the values of the paddle and the ball
+		call applyPowerup, ecx, [edi + esi + Powerup.Up_Down]
 		
-		call fillRectangle, eax, ebx, edx, edx, 0, 0, [Black]			; Drawing black over the powerup to remove it visualy from the game whem collision occurs
+		call fillRectangle, eax, ebx, edx, edx, 0, 0, 0
 		mov esi, ecx
 		
-		call activateTimer		; Activating the one minute timer
+		call activateTimer
 
-		; Check to see if the powerup didn't collide and just fell out of the frame
 		@@checkBoundaries:
 		call scaleDown, [edi + esi + Powerup.y_Pos]
 		cmp eax, 200
-		jle @@notactive
+		jle @@stillactive
 		
 		mov [edi + esi + Powerup.Active], 0
-		
-		; Moving on to the next powerup
-		@@notactive:
-			add esi, [Powerup_Struct_Size]									; Increment esi with Powerup_Struct_Size to go to the next powerup
-			call Multiply, [Powerup_Struct_Size], [Powerup_Amount]		; Multiplies Powerup_Struct_Size and Powerup_Amount to get the limit of the loop
 			
-			cmp esi, eax		; Compare the counter to the limit of the loop
-			jl @@updatePowerup	; Jump if lower to @@updatePowerup
+		@@stillactive:
+			add esi, [Powerup_Struct_Size]
+			
+			mov eax, [Powerup_Struct_Size]
+			mov ebx, [Powerup_Amount]
+			xor edx, edx
+			imul ebx
+			
+			cmp esi, eax
+			jl @@updatePowerup
 		
 	@@done:
 		pop esi
@@ -356,16 +336,14 @@ PROC movePowerup
 	
 ENDP movePowerup
 
-; Applies powerup by updating the values for the paddle and the ball
 PROC applyPowerup
 	ARG @@Powerup:dword, @@type:dword
 	LOCAL @@speed:dword, @@damage:dword, @@sizepaddle:dword
 	USES eax, ebx, ecx, edx, esi, edi
 	
-	lea edi, [powerups]		; Load effective adress of powerups into edi
-	mov ecx, [@@Powerup]	; Initialize the powerup offset into ecx to only apply 1 powerup
+	lea edi, [powerups]
+	mov ecx, [@@Powerup]
 	
-	; Initialize the powerup effects into local variables
 	mov ebx, [edi + ecx + Powerup.Speedmultiply]
 	mov [@@speed], ebx
 	mov ebx, [edi + ecx + Powerup.Damagemultiply]
@@ -373,51 +351,50 @@ PROC applyPowerup
 	mov ebx, [edi + ecx + Powerup.Sizemultiply]
 	mov [@@sizepaddle], ebx
 	
-	lea esi, [game_ball]	; Load effective adress of game_ball into esi
-	xor edx, edx			; Set edx to zero for the multiplications
-	
 	cmp [@@type], 0			; 0 for Powerdown and 1 for Powerup
 	je @@Powerdown
 	
-	; Applying a Powerup
-		
+	lea esi, [game_ball]
+	xor edx, edx
 	@@balls_up:
-		call Multiply, [esi + Ball.x_Vel], [@@speed]	; Multiply the x velocity with the powerup speed multiplicator
+		mov eax, [esi + Ball.x_Vel]
+		mov ebx, [@@speed]
+		imul ebx
 		mov [esi + Ball.x_Vel], eax
 		
-		call Multiply, [esi + Ball.y_Vel], [@@speed]	; Multiply the y velocity with the powerup speed multiplicator
+		mov eax, [esi + Ball.y_Vel]
+		mov ebx, [@@speed]
+		imul ebx
 		mov [esi + Ball.y_Vel], eax
 		
 		mov ebx, [@@damage]
-		mov [esi + Ball.Damage], ebx					; Set the ball damage to the powerup damage multiplicator
+		mov [esi + Ball.Damage], ebx
 	
 	@@paddle_up:
-		lea edi, [level_bricks]		; Load effective adress of level_bricks into edi
+		lea edi, [level_bricks]
 		
-		call Multiply, [edi + Brick.Width], [@@sizepaddle]	; Multiply the paddle width with the powerup size multiplicator
+		mov eax, [edi + Brick.Width]
+		mov ebx, [@@sizepaddle]
+		imul ebx
 		mov [edi + Brick.Width], eax
-		
 		ret
-
-	; Applying a Powerdown
+	
 	@@Powerdown:
+		lea esi, [game_ball]
 		@@balls_down:
-			; Divide the x velocity with the powerup speed multiplicator
 			mov eax, [esi + Ball.x_Vel]
 			cdq
 			idiv [@@speed]
 			mov [esi + Ball.x_Vel], eax
 			
-			; Divide the y velocity with the powerup speed multiplicator
 			mov eax, [esi + Ball.y_Vel]
 			cdq
 			idiv [@@speed]
 			mov [esi + Ball.y_Vel], eax
 		
 		@@paddle_down:
-			lea edi, [level_bricks]		; Load effective adress of level_bricks into edi
+			lea edi, [level_bricks]
 			
-			; Initialize the values of the paddle to redraw smaller
 			call scaleDown, [edi + Brick.Height]
 			mov edx, eax
 			call scaleDown, [edi + Brick.Width]
@@ -426,77 +403,17 @@ PROC applyPowerup
 			mov ebx, eax
 			call scaleDown, [edi + Brick.x_Pos]
 			
-			call drawRectangle, eax, ebx, ecx, edx, 0, [Black]	; Draw over the paddle before drawing the smaller paddle
+			call drawRectangle, eax, ebx, ecx, edx, 0, 0
 			
-			; Divide the paddle width with the powerup size multiplicator
 			mov eax, [edi + Brick.Width]
 			cdq
 			idiv [@@sizepaddle]
-			mov [edi + Brick.Width], eax
 			
+			mov [edi + Brick.Width], eax
 			ret
 
 ENDP applyPowerup
 
-; Resetting the Powerups after the timer
-PROC resetPowerup
-	USES eax, ebx, ecx, edx
-	
-	cmp [timer_active], 0	; Check to see if timer is active, if not, skip the procedure
-	jne @@Checktime
-	
-	ret
-	
-	; Checks time for timer
-	@@Checktime:
-		xor edx, edx
-		lea edi, [powerups]		; Load effective adress of powerups to edi
-		@@Poweruploop:
-			cmp [edi + edx + Powerup.Applied], 1	; Check if the powerup is applied, if not skip timer check
-			jne @@next
-
-			; Timer check
-			call checkTimer, 1, edx
-			cmp eax, 1
-			je @@Powerupinactive
-			
-			; Continue to next powerup
-			@@next:
-				add edx, [Powerup_Struct_Size]
-				call Multiply, [Powerup_Struct_Size], [Powerup_Amount]
-				
-				cmp edx, eax
-				jl @@Poweruploop
-				
-			ret
-		
-		; If timer passes, ball and paddle reset to standard values
-		@@Powerupinactive:
-		mov [timer_active], 0
-		
-		lea esi, [game_ball]		; Load effective adress of game_ball to esi
-		mov [esi + Ball.Damage], 1	; Reset ball damage	
-		
-		lea edi, [level_bricks]		; Load effective adress of level_bricks
-
-		; Reset the paddle to original values and redraw
-		call scaleDown, [edi + Brick.Height]
-		mov edx, eax
-		call scaleDown, [edi + Brick.Width]
-		mov ecx, eax
-		call scaleDown, [edi + Brick.y_Pos]
-		mov ebx, eax
-		call scaleDown, [edi + Brick.x_Pos]
-		
-		call drawRectangle, eax, ebx, ecx, edx, 0, [Black]
-		call scaleUp, 25
-		mov [edi + Brick.Width], eax
-		
-		jmp @@Poweruploop
-
-ENDP resetPowerup
-
-; Refreshing the movement of the ball
 PROC moveBall
 	LOCAL @@temp:dword, @@temp1:dword, @@brickIndex: dword
 	; esi equals game_ball Array pointer
@@ -567,7 +484,7 @@ PROC moveBall
 	
 	cmp ecx, 0
 	je paddle							; in case of paddle collision skip updatebrick
-	call updateBrick, 0, ecx			; If a brick was hit update life/color and
+	call updateBrick, 0, ecx					; If a brick was hit update life/color and
 	
 	paddle:
 	;A and B are points in the intersect method (these represent the block border)
@@ -996,54 +913,63 @@ PROC intersect
 	
 ENDP intersect
 
-; Updating moving bricks and when bricks get hit
 PROC updateBrick
 	ARG @@type:dword, @@hitbrick:dword
 	LOCAL @@temp1: dword , @@temp2: dword
+	; ecx, esi and edi already defined before function call
+	; ecx equals the brick index
+	; esi equals game_ball Array pointer
+	; edi equals level_bricks Array pointer
 	USES eax, ebx, edx, ecx
-	
-	mov ecx, [Brick_Struct_Size]	; Initialize Brick_Struct_Size into ecx as a counter
-	lea esi, [game_ball]			; Load effective adress of game_ball into esi
-	lea edi, [level_bricks]			; Load effective adress of level_bricks into edi
-	
-	cmp [@@type], 1				; 0 equals hit brick 1 equals moving bricks
-	je @@Brick_update	
+	mov ecx, [Brick_Struct_Size]
+	lea esi, [game_ball]
+	lea edi, [level_bricks]
+	cmp [@@type], 1		; Update moving bricks
+	je short @@Brick_update
 		
-	mov ecx, [@@hitbrick]	; Initialize @@hitbrick into ecx to only update the brick that is hit
+	mov ecx, [@@hitbrick]
+	; xor edx, edx
+	; mul [Brick_Struct_Size]
+	; mov ecx, eax
+	
+	; neg [edi + ecx + Brick.x_Vel]
 	
 	mov eax, [esi + Ball.Damage]
 	sub [edi + ecx + Brick.Color], eax		; Subtract Damage from the color index of the bricks to show damage
 	
-	cmp [edi + ecx + Brick.Color], 0	; Check to see it the brick broke or not
-	jg short @@Brick_update					; Jump is the brick is not broken
+	cmp [edi + ecx + Brick.Color], 0
+	jg @@Brick_update
 	
 	mov [edi + ecx + Brick.Color], 0
-	mov [edi + ecx + Brick.x_Vel], 0
-	mov [edi + ecx + Brick.y_Vel], 0
 	
-	; Initialize and generate pseudo random number
 	call rand_init
-	call rand, 3
+	call rand, 1
 	
-	cmp eax, 0			; Check to see if there will be a powerup or not 1/3 chance to get a powerup when breaking a brick
-	jne @@Brick_update	; jump if not equal to 0 and there is no powerup
-	
-	; Generate pseudo random number to randomize which powerup falls
+	cmp eax, 0
+	jne @@Brick_update
 	push esi
 	@@random:
 		call rand, [Powerup_Amount]
-		
-		call Multiply, eax, [Powerup_Struct_Size]		
+		; call rand, 6
+		mov ebx, [Powerup_Struct_Size]
+		xor edx, edx
+		imul ebx			
 		mov edx, eax
 		
-		lea esi, [powerups]		; Load effective adress of powerups into esi
+		lea esi, [powerups]
 	
-		cmp [esi + edx + Powerup.Active], 1		; Check to see if the random powerup is already active
-		je @@random								; Jump if equal (active) to @@random to regenerate a pseudo random number
+		cmp [esi + edx + Powerup.Active], 1
+		je @@random
+	; cmp [esi + edx + Powerup.y_Pos], 200
+	; pop esi
+	; jg @@Brick_update
+	; push esi
 	
 	mov [esi + edx + Powerup.Active], 1
 	
-	; Load brick coordinates into powerup coordinates to initialize the powerup
+	; call scaleDown, [edi + ecx + Brick.y_Pos]
+	; mov ebx, eax
+	; call scaleDown, [edi + ecx + Brick.x_Pos]
 	mov eax, [edi + ecx + Brick.x_Pos]
 	mov ebx, [edi + ecx + Brick.y_Pos]
 	
@@ -1052,32 +978,35 @@ PROC updateBrick
 	
 	pop esi
 	
-	; Update bricks
 	@@Brick_update:	
-		; Initialize brick values into local variabels and registers to draw
-		call scaleDown, [edi + ecx + Brick.Width]	; Initialize the width of the brick into @@temp1
+		
+		; mov edx, 0
+		
+		call scaleDown, [edi + ecx + Brick.Width]
 		mov [@@temp1], eax
 		
-		call scaleDown, [edi + ecx + Brick.Height]	; Initialize the height of the brick into @@temp2
+		call scaleDown, [edi + ecx + Brick.Height]
 		mov [@@temp2], eax
 		
-        call scaleDown, [edi + ecx + Brick.y_Pos]   ; Initialize the y coordinate of the brick into ebx
+        call scaleDown, [edi + ecx + Brick.y_Pos]    ; Initialize the y-coordinate of the brick into ebx
 		mov ebx, eax
-		call scaleDown, [edi + ecx + Brick.x_Pos]   ; Initialize the x coordinate of the brick into eax
+		call scaleDown, [edi + ecx + Brick.x_Pos]    ; Initialize the x-coordinate of the brick into eax
 		
-        call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, [Black]	; Draw black rectangle to coverup brick
+		mov edx, 0									  ; color black to erase
 		
-		; Updating the coordinates of the brick to move the brick
+        call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx
+		
 		mov eax, [edi + ecx + Brick.x_Vel]
 		add [edi + ecx + Brick.x_Pos], eax
 		
 		mov eax, [edi + ecx + Brick.y_Vel]
 		add [edi + ecx + Brick.y_Pos], eax
+		
+		; call moveObject, [edi + ecx + Brick.x_Pos], [edi + ecx + Brick.y_Pos], [edi + ecx + Brick.x_Vel], [edi + ecx + Brick.y_Vel]
 	
 		mov eax, [edi + ecx + Brick.x_Pos]		; Initialize the x-coordinate of the brick into eax
 		mov ebx, [edi + ecx + Brick.y_Pos]		; Initialize the y-coordinate of the brick into ebx
 		
-		; Checks the treshholds of the moving brick and if boundy hit negate velocity
 		@@CheckTreshhold:
 			mov edx, [edi + ecx + Brick.Hor_limR]
 			sub edx, [edi + ecx + Brick.Width]
@@ -1097,37 +1026,44 @@ PROC updateBrick
 			cmp ebx, edx
 			jg short @@neg_VelY
 			
-		; Draw the updated bricks
 		@@Drawing:
 			mov edx, [edi + ecx + Brick.Color]		; Initialize the color of the brick into dx	
 			
 			cmp edx, 0		; Check to if the brick has a black color
-			jg @@draw		; If the color index is greater than 0, that means that the brick is not black, jump to draw
+			jg @@draw			; If the color index is greater than 0, that means that the brick is not black, jump to draw
 			
 			mov [edi + ecx + Brick.Active], 0				; Set the Brick interactability to zero, so the brick is not interactable
 			
 			@@draw: 
-				; Initialize brick coordinates into registers
-				call scaleDown, [edi + ecx + Brick.y_Pos]   ; Initialize the y-coordinate of the brick into ebx
+				call scaleDown, [edi + ecx + Brick.Width]
+				mov [@@temp1], eax
+		
+				call scaleDown, [edi + ecx + Brick.Height]
+				mov [@@temp2], eax
+		
+				call scaleDown, [edi + ecx + Brick.y_Pos]    ; Initialize the y-coordinate of the brick into ebx
 				mov ebx, eax
-				call scaleDown, [edi + ecx + Brick.x_Pos]   ; Initialize the x-coordinate of the brick into eax
+				call scaleDown, [edi + ecx + Brick.x_Pos]    ; Initialize the x-coordinate of the brick into eax
 				
-				call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx		; Drawning the brick in the new color or new position
+				call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx		; Drawning the brick in the new color
 			
 			jmp @@next
 			
 		@@neg_VelX:
-			neg [edi + ecx + Brick.x_Vel]	; negate the x velocity
+			neg [edi + ecx + Brick.x_Vel]
 			jmp @@Drawing
 			
 		@@neg_VelY:
-			neg [edi + ecx + Brick.y_Vel]	; negate the y velocity
+			neg [edi + ecx + Brick.y_Vel]
 			jmp @@Drawing
 		
 		@@next:
 			add ecx, [Brick_Struct_Size]
-
-			call Multiply, [Brick_Struct_Size], [Level_Size]	; Multiply Brick_Struct_Size and Level_Size
+			
+			mov eax, [Brick_Struct_Size]
+			xor edx, edx
+			imul [Level_Size]
+			
 			cmp ecx, eax
 			jl @@Brick_update
 		
@@ -1135,7 +1071,7 @@ PROC updateBrick
 
 ENDP updateBrick
 
-; Compute movement of the paddles
+;Compute movement of the paddles
 PROC movePaddle					
 	; ARG @@Brick_Array:dword	
 	USES eax, ebx, ecx, edx
@@ -1239,11 +1175,9 @@ PROC movePaddle
 	ret
 ENDP movePaddle
 
-; Reinitialize the GUI
 PROC backToMenu
 	mov [Skip_GUI], 0
-	
-	; Initialize the first page of the GUI
+		
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
 	call fillBackground, 0
 	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
@@ -1253,7 +1187,7 @@ ENDP backToMenu
 
 ; Draws the differen levels of the bricks
 PROC drawBricks
-	; ARG @@Brick_Amount:dword
+	ARG @@Brick_Amount:dword
 	LOCAL @@temp1: dword , @@temp2: dword
     USES eax, ebx, ecx, edx
     
@@ -1261,23 +1195,27 @@ PROC drawBricks
     
     brickloop:
 		
-		call scaleDown, [edi + ecx + Brick.Width]	; Initialize the width of the brick into @@temp1
+		call scaleDown, [edi + ecx + Brick.Width]
+		;mov eax, [edi + ecx + Brick.Width]
 		mov [@@temp1], eax
 		
-		call scaleDown, [edi + ecx + Brick.Height]	; Initialize the height of the brick into @@temp2
+		call scaleDown, [edi + ecx + Brick.Height]
 		mov [@@temp2], eax
 		
-        call scaleDown, [edi + ecx + Brick.y_Pos]   ; Initialize the y coordinate into ebx
+        call scaleDown, [edi + ecx + Brick.y_Pos]    ; y-coordinate 
 		mov ebx, eax
-		call scaleDown, [edi + ecx + Brick.x_Pos]   ; Initialize the x coordinate into eax
+		call scaleDown, [edi + ecx + Brick.x_Pos]    ; x-coordinate
 		
-		mov edx, [edi + ecx + Brick.Color]	  		; Initialize the Color into edx
+		mov edx, [edi + ecx + Brick.Color]	  ; color
 		
         call drawRectangle, eax, ebx, [@@temp1], [@@temp2], 0, edx
         
-		add ecx, [Brick_Struct_Size]				; Add amount of bytes in Brick struct to move to next brick in level_bricks
+		add ecx, [Brick_Struct_Size]		; Add amount of bytes in Brick struct to move to next brick in level_bricks
 		
-		call Multiply, [Brick_Struct_Size], [Level_Size]	; Multiply Brick_Struct_Size and Level_Size to check if all bricks are drawn
+		mov eax, [Brick_Struct_Size]
+		xor edx, edx
+		mov ebx, [@@Brick_Amount]
+		mul ebx
 		
         cmp ecx, eax	; Check to see if all the Bricks are drawn
         jl brickloop
@@ -1286,17 +1224,14 @@ PROC drawBricks
 
 ENDP drawBricks
 
-; Interactable GUI
 PROC gui
 	USES eax, ecx
 	
-	; Check to see if level is active or not 
 	cmp [Skip_GUI], 0
 	je short @@press_check
 	
 	ret
 	
-	; Check which button is pressed
 	@@press_check:
 		mov ah, 01h
 		int 16h
@@ -1307,19 +1242,19 @@ PROC gui
 		
 		call ReadFile, offset Arrow, offset dataread_Arrow, DATASIZE_Arrow
 		
-		cmp ebx, 3			; Check to see if the levelselect page is active
+		cmp ebx, 3
 		je @@levelselect
 		
-		cmp al, 'r'				; 114 is ASCII code for 'r'
+		cmp al, 114				; 114 is ASCII code for 'r'
 		je @@gui_1				; Jump if equal to level
 		
-		cmp al, 'R'				; 82 is ASCII code for 'R'
+		cmp al, 82				; 82 is ASCII code for 'R'
 		je @@gui_1				; Jump if equal to level
 		
-		cmp al, 'f'				; 102 is ASCII code for 'f'
-		je short @@gui_2		; Jump if equal to endless
+		cmp al, 102				; 102 is ASCII code for 'f'
+		je short @@gui_2				; Jump if equal to endless
 		
-		cmp al, 'F'				; 70 is ASCII code for 'F'
+		cmp al, 70				; 70 is ASCII code for 'F'
 		je @@gui_2				; Jump if equal to endless
 		
 		@@levelselect:	
@@ -1327,44 +1262,43 @@ PROC gui
 			cmp al, 13				; 13 is ASCII code for 'Enter'
 			je @@enter_pressed		; Jump if equal to exit
 			
-			cmp ebx, 3			; Check to see if the levelselect page is active
+			cmp ebx, 3
 			jne @@continue
+			
+			
 
-			cmp al, 's'
+			cmp al, 115
 			je @@left
 			
-			cmp al, 'S'
+			cmp al, 83
 			je @@left
 			
-			cmp al, 'd'
+			cmp al, 100
 			je @@right
 			
-			cmp al, 'D'
+			cmp al, 68
 			je @@right
 		
 		@@continue:
 			ret
 			jmp @@press_check
 		
-	; Play button is selected
 	@@gui_1:
-		call fillRectangle, 192, 137, 25, 25, 0, 0, [Black]
+		call fillRectangle, 192, 137, 25, 25, 0, 0, 0
 		call fillRectangle, 192, 104, 25, 25, 1, offset dataread_Arrow, 0
 		
 		mov ebx, 1	; Play index
 		
 		ret
 		
-	; Exit button is selected
 	@@gui_2: 
-		call fillRectangle, 192, 104, 25, 25, 0, 0, [Black]
+		call fillRectangle, 192, 104, 25, 25, 0, 0, 0
 		call fillRectangle, 192, 137, 25, 25, 1, offset dataread_Arrow, 0
 	
 		mov ebx, 2	; Exit index
 		
 		ret
-	
-	; Check which action needs to be performed when pressing enter
+
 	@@enter_pressed:
 		call checkSprite
 		
@@ -1373,77 +1307,77 @@ PROC gui
 		
 		ret		
 		
-	; Move the level selector to the left
 	@@left:
 		mov ecx, 0
 		cmp [index], 0
 		jle @@borderleft
 		
-		call Multiply, 100, [index]
+		mov eax, 100
+		xor edx, edx
+		imul [index]
 		add eax, 13
-		call drawRectangle, eax, 61, 94, 60, 1, [White]		; Redraw a white rectangle over the selector to cover it up
+		call drawRectangle, eax, 61, 94, 60, 1, 15
 
-		; Update index
 		@@continueleft:
 			dec [index]
 			mov ecx, 2
 			cmp [index], 0
-			jge @@displayselector
+			jge @@displaysprite
 		
 		inc [index]
-		
 		@@borderleft:
 			ret
 		
-	; Move the level selector to the right
 	@@right:
 		mov ecx, 1
 		cmp [index], 2
 		jge @@borderright
 		
-		call Multiply, 100, [index]
+		mov eax, 100
+		xor edx, edx
+		imul [index]
 		add eax, 13
-		call drawRectangle, eax, 61, 94, 60, 1, [White]		; Redraw a white rectangle over the selector to cover it up
+		call drawRectangle, eax, 61, 94, 60, 1, 15
 		
-		; Update index
 		@@continueright:
 			inc [index]
 			mov ecx, 2
 			cmp [index], 2
-			jle @@displayselector
+			jle @@displaysprite
 			
 			dec [index]
 			
 		@@borderright:
 			ret
-	
-	; Display the green selector
-	@@displayselector:
-		call Multiply, 100, [index]
-		add eax, 13
 		
-		cmp ecx, 2
-		je @@drawselected
-		
-		cmp ecx, 0
-		je @@continueleft
-		
-		cmp ecx, 1
-		je @@continueright
-		
-		ret
-		
-		; Draw green rectangle around level as selector
-		@@drawselected:
-			call drawRectangle, eax, 61, 94, 60, 1, 2
+		@@displaysprite:
+			mov eax, 100
+			xor edx, edx
+			imul [index]
+			add eax, 13
+			
+			cmp ecx, 2
+			je @@drawselected
+			
+			call drawRectangle, eax, 61, 94, 60, 1, 15
+			
+			cmp ecx, 0
+			je @@continueleft
+			
+			cmp ecx, 1
+			je @@continueright
 			
 			ret
+			
+			@@drawselected:
+				call drawRectangle, eax, 61, 94, 60, 1, 2
+				
+				ret
 
 ENDP gui
 
 PROC checkSprite
 	
-	; Multiple checks to check which action needs to be performed
 	cmp ebx, 1
 	je @@levelspage
 	
@@ -1455,10 +1389,9 @@ PROC checkSprite
 	
 	ret
 	
-	; Read and initialize the levelselect page
 	@@levelspage:
 		call ReadFile, offset level_page, offset dataread_GUI, DATASIZE_FS
-		call fillRectangle, 0, 0, 320, 200, 0, 0, [Black]
+		call fillRectangle, 0, 0, 320, 200, 0, 0, 0
 		call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
 		call drawRectangle, 13, 61, 94, 60, 1, 2
 		
@@ -1466,15 +1399,13 @@ PROC checkSprite
 		
 		ret
 	
-	; Initialize the different levels
 	@@level_initialize:
 		xor ebx, ebx
 		
-		; Initialize powerups and ball
-		call initializePowerup
+		call initializePowerup, [Powerup_Amount]
 		call initializeBall
 		
-		mov [Skip_GUI], 1	; Disable GUI
+		mov [Skip_GUI], 1
 		
 		cmp [index], 0
 		je @@level1
@@ -1487,35 +1418,36 @@ PROC checkSprite
 		
 		ret
 		
-		; Initialize level 1
 		@@level1:
 			call ReadFile, offset level1, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 41
-
-			ret
-		
-		; Initialize level 2
-		@@level2:
-			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
-			call initializeLevel, offset dataread_Level, 37
+			
 			
 			ret
 		
-		; Initialize level 3
+		@@level2:
+			call ReadFile, offset level2, offset dataread_Level, DATASIZE_Bricks
+			call initializeLevel, offset dataread_Level, 37
+			; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			; call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			
+			ret
+		
 		@@level3:
 			call ReadFile, offset level3, offset dataread_Level, DATASIZE_Bricks
 			call initializeLevel, offset dataread_Level, 52
-
+			; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+			; call initializePowerup, offset dataread_Powerup, [Powerup_Amount]
+			
 			ret
 		
 	@@exit_game:
 		call terminateProcess
-		
+		call stopMusic
 		ret
 		
 ENDP checkSprite
 
-; Reading the files
 PROC ReadFile
 	ARG	 @@filepathptr:dword, @@dataptr:dword, @@noofbytes:dword
 	USES eax, ebx, ecx, edx
@@ -1558,7 +1490,6 @@ PROC ReadFile
 		call terminateProcess	
 ENDP ReadFile
 
-; Initialization of the bricks and paddle
 PROC initializeLevel
 	ARG @@dataptr:dword, @@Brick_Amount:dword
 	USES eax, ebx, ecx, esi
@@ -1566,13 +1497,19 @@ PROC initializeLevel
 	mov eax, [@@Brick_Amount]
 	mov [Level_Size], eax
 	
+	; print to screen test data
 	mov esi, [@@dataptr]		; Initialize datapointer value into esi to read the right values of the file
 	lea edi, [level_bricks]		; Load effective adress of the level_bricks array which contain the Brick structs of the level
 	
-	call Multiply, [Brick_Struct_Size], [Level_Size]	; Calculate the amount of Bricks that need to be read from the file
-	mov ecx, eax										; Store eax in ecx because eax will be overwritten
-	xor ebx, ebx										; Set ebx to zero to count correctly trough the level_bricks array
-
+	; Calculate the amount of Bricks that need to be read from the file
+	xor edx, edx				; Set edx:eax to eax for multiplication
+	mov eax, [Brick_Struct_Size]					; Initalize amount of bytes in the Brick struct to eax
+	mov ebx, [@@Brick_Amount]	; Initalize amount of Bricks in the level to ebx
+	imul ebx					; Signed multiplication of the amount of Bricks to the amount of bytes to calculate the maximum amount of bytes to be read from the file
+	mov ecx, eax				; Store eax in ecx because eax will be overwritten
+	
+	xor ebx, ebx				; Set ebx to zero to count correctly trough the level_bricks array
+	
 	looptest:
 		lodsd									; Loads a dword (4 byte) value into eax
 		call scaleUp, eax
@@ -1612,146 +1549,176 @@ PROC initializeLevel
 		call scaleUp, eax
 		mov [edi + ebx + Brick.Ver_limT], eax	; Assign the moving vertical top treshhold value from the file into the Brick struct
 		
-		lodsd									; Loads a dword (4 byte) value into eax
+		lodsd									; Loads a word (2 byte) value into ax
 		mov [edi + ebx + Brick.Color], eax		; Assign the Color value from the file into the Brick struct
 		
-		lodsd									; Loads a dword (4 byte) value into eax
+		lodsd									; Loads a byte (1 byte) value into al
 		mov [edi + ebx + Brick.Active], eax		; Assign the Active value from the file into the Brick struct
 		
-		add ebx, [Brick_Struct_Size]			; Add amount of bytes in Brick struct to continue to the next Brick
-		cmp ebx, ecx							; Check to see if all the Bricks needed for the level are created
+		add ebx, [Brick_Struct_Size]		; Add amount of bytes in Brick struct to continue to the next Brick
+		cmp ebx, ecx	; Check to see if all the Bricks needed for the level are created
 		jl looptest	
 	
 	call fillBackground, 0
-	call drawBricks
+	call drawBricks, [@@Brick_Amount]
+	
+	; mov eax, [edi + Brick.Width]
+	; shl eax,2
+	; mov [edi + Brick.Width], eax
+	
+	;When initializing level also adjust ball to scale maybe hardcode this once we tested right
+	; lea esi, [game_ball]
+	; call scaleUp, [esi + Ball.x_Pos]
+	; mov [esi + Ball.x_Pos],eax
+	
+	; call scaleUp, [esi + Ball.y_Pos]
+	; mov [esi + Ball.y_Pos],eax
+	
+	; call scaleUp, [esi + Ball.Radius]    
+	; mov [esi + Ball.Radius], eax
 	
 	ret
 
 ENDP initializeLevel
 
-; Initialize the ball
 PROC initializeBall
+	; ARG @@dataptr:dword
 	USES eax, ebx, ecx, edx
 	
-	; Read from the ball file
 	call ReadFile, offset ball, offset dataread_Ball, DATASIZE_Ball
 	
 	mov esi, offset dataread_Ball
 	lea edi, [game_ball]
 	
-	lodsd							; Loads a dword (4 byte) value into eax
+	lodsd
 	call scaleUp, eax
-	mov [edi + Ball.x_Pos], eax		; Assign the ball x coordinate
+	mov [edi + Ball.x_Pos], eax
 	
-	lodsd							; Loads a dword (4 byte) value into eax
+	lodsd
 	call scaleUp, eax
-	mov [edi + Ball.y_Pos], eax		; Assign the ball y coordinate
+	mov [edi + Ball.y_Pos], eax
 	
-	lodsd							; Loads a dword (4 byte) value into eax
-	mov [edi + Ball.x_Vel], eax		; Assign the ball x velocity
+	lodsd
+	mov [edi + Ball.x_Vel], eax
 	
-	lodsd							; Loads a dword (4 byte) value into eax
-	mov [edi + Ball.y_Vel], eax		; Assign the ball y velocity
+	lodsd
+	mov [edi + Ball.y_Vel], eax
 	
-	lodsd							; Loads a dword (4 byte) value into eax
+	lodsd
 	call scaleUp, eax
-	mov [edi + Ball.Radius], eax	; Assign the ball radius
+	mov [edi + Ball.Radius], eax
 	
-	lodsd							; Loads a dword (4 byte) value into eax
-	mov [edi + Ball.Damage], eax	; Assign the ball damage
+	lodsd
+	mov [edi + Ball.Damage], eax
 	
 	ret
 
 ENDP initializeBall
 
-; Initialize powerups
 PROC initializePowerup
+	ARG @@Powerup_Amount:dword
+	LOCAL @@temp1:dword, @@temp2:dword
 	USES eax, ebx, ecx, edx, edi
 	
+	; call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
+	
 	mov esi, offset dataread_Powerup
-	lea edi, [powerups]					; Load effective adress of powerups into edi
+	lea edi, [powerups]
 	xor ecx, ecx
 	
-	; Initialize the powerup sprite file offsets into the structs
 	@@initialize:
+		; call ReadFile, offset instabr, offset dataread_Powerup, DATASIZE_Powerup
 		mov ebx, offset instabr
 		mov [edi + ecx + Powerup.Dataread], ebx			
 		add ecx, [Powerup_Struct_Size]
 		
+		; call ReadFile, offset bigpad, offset dataread_Powerup, DATASIZE_Powerup
 		mov ebx, offset bigpad
 		mov [edi + ecx + Powerup.Dataread], ebx
 		add ecx, [Powerup_Struct_Size]
-
+	
+		; call ReadFile, offset morebal, offset dataread_Powerup, DATASIZE_Powerup
+		; mov ebx, offset morebal
+		; mov [edi + ecx + Powerup.Dataread], ebx
+		; add ecx, [Powerup_Struct_Size]
+		
+		; call ReadFile, offset fastbal, offset dataread_Powerup, DATASIZE_Powerup
 		mov ebx, offset fastbal
 		mov [edi + ecx + Powerup.Dataread], ebx
 		add ecx, [Powerup_Struct_Size]
-
+		
+		; call ReadFile, offset smallpad, offset dataread_Powerup, DATASIZE_Powerup
 		mov ebx, offset smallpad
 		mov [edi + ecx + Powerup.Dataread], ebx
 		add ecx, [Powerup_Struct_Size]
-	
+		
+		; call ReadFile, offset slowbal, offset dataread_Powerup, DATASIZE_Powerup
 		mov ebx, offset slowbal
 		mov [edi + ecx + Powerup.Dataread], ebx
 		add ecx, [Powerup_Struct_Size]
 		
-		call Multiply, [Powerup_Struct_Size], [Powerup_Amount]	; Multiply Powerup_Struct_Size and Powerup_Amount to get the limit of the loop
+		mov eax, [Powerup_Struct_Size]
+		xor edx, edx
+		mov ebx, [@@Powerup_Amount]
+		imul ebx
 		
 		cmp ecx, eax
 		jle @@initialize
+		
 	
-	lea edi, [powerups]		; Load effective adress of powerups into edi
 	
-	xor ebx, ebx
+	mov eax, [Powerup_Struct_Size]
+	xor edx, edx
+	mov ebx, 6
+	imul ebx
+	mov edx, eax
+	
+	; mov eax, [Powerup_Struct_Size]
+	; xor edx, edx
+	; mov ebx, [@@Powerup_Amount]
+	; imul ebx
+	; mov ebx, eax
+	
+	lea edi, [powerups]
+	
+	mov [@@temp2], 0
 	xor ecx, ecx
 	@@loadvalues:
 		call ReadFile, offset powerups_file, offset dataread_Powerup, DATASIZE_Powerup
 		mov esi, offset dataread_Powerup
-		xor edx, edx
+		mov [@@temp1], 0
 		
 		@@Powerups:
-			lodsd											; Loads a dword (4 byte) value into eax
+			lodsd
 			mov [edi + ecx + Powerup.x_Pos], eax
 			mov [edi + ecx + Powerup.y_Pos], eax
 			mov [edi + ecx + Powerup.Active], eax
 			
-			lodsd											; Loads a dword (4 byte) value into eax
-			mov [edi + ecx + Powerup.Up_Down], eax			; Assign if powerup or powerdown
-			lodsd											; Loads a dword (4 byte) value into eax
-			mov [edi + ecx + Powerup.Speedmultiply], eax	; Assign speed multiplicator
-			lodsd											; Loads a dword (4 byte) value into eax
-			mov [edi + ecx + Powerup.Damagemultiply], eax	; Assign damage multiplicator
-			lodsd											; Loads a dword (4 byte) value into eax
-			mov [edi + ecx + Powerup.Sizemultiply], eax		; Assign size multiplicator
+			lodsd
+			mov [edi + ecx + Powerup.Up_Down], eax
+			lodsd
+			mov [edi + ecx + Powerup.Speedmultiply], eax
+			lodsd
+			mov [edi + ecx + Powerup.Damagemultiply], eax
+			; lodsd
+			; mov [edi + ecx + Powerup.Ball_amount], eax
+			lodsd
+			mov [edi + ecx + Powerup.Sizemultiply], eax
 			
 			add ecx, [Powerup_Struct_Size]
-			inc edx
+			inc [@@temp1]
 			
-			cmp edx, 5		; Compare edx to 5 to initialize the 5 powerups
+			cmp [@@temp1], 5
 			jl @@Powerups
 			
-		inc ebx
-		
-		cmp ebx, 3			; Compare ebx to 6 to initialize the 5 powerups 3 times
-		jl @@loadvalues
+			inc [@@temp2]
+			
+			cmp [@@temp2], 6
+			jl @@loadvalues
 	
 	ret
 ENDP initializePowerup
 
-; Multiply procedure
-PROC Multiply
-	ARG @@factor1:dword, @@factor2:dword
-	USES ebx, edx 
-	
-	mov eax, [@@factor1]
-	mov ebx, [@@factor2]
-	xor edx, edx
-	imul ebx
-	
-	ret
-
-ENDP Multiply
-
-; Scale up
 PROC scaleUp
 	ARG @@X:dword
 	USES ecx
@@ -1763,7 +1730,6 @@ PROC scaleUp
 	ret	; eax
 ENDP scaleUp
 
-; Scale down
 PROC scaleDown
 	ARG @@X:dword
 	USES ecx
@@ -1775,7 +1741,6 @@ PROC scaleDown
 	ret	; eax
 ENDP scaleDown
 
-; Get system time for the timer
 PROC GetSystemTime
 	mov ah, 2Ch        ; MS-DOS interrupt to get system time
 	int 21h
@@ -1785,7 +1750,6 @@ PROC GetSystemTime
 	ret
 ENDP GetSystemTime
 
-; Activating the timer
 PROC activateTimer
 	mov [timer_flag], 0
 
@@ -1796,7 +1760,6 @@ PROC activateTimer
 	ret
 ENDP activateTimer
 
-; Check the time for the timer
 PROC checkTimer
 	ARG @@amount:dword, @@Powerup:dword
 	USES ebx, ecx
@@ -1805,12 +1768,14 @@ PROC checkTimer
 	mov ecx, [@@Powerup]
 	
 	call GetSystemTime
-	sub eax, [start_timer]							; Get the elapsed time from when the timer was activated
+	sub eax, [start_timer]
 	mov [edi + ecx + Powerup.Elapsed_Time], eax
 
 	mov ebx, [@@amount]
-	cmp [edi + ecx + Powerup.Elapsed_Time], ebx		; Check the limit for the time (eq 1 minute)
+	cmp [edi + ecx + Powerup.Elapsed_Time], ebx
 	jge @@timerExpired
+
+	; Timer not expired - add your code here if needed
 
 	jmp @@exit
 
@@ -1839,7 +1804,62 @@ PROC fillBackground
 
 ENDP fillBackground
 
+; This printing procedure is used to debug the code, it is put into comment when not used
+; PROC printUnsignedInteger
+	; ARG @@number:word
+	; USES eax, ebx, ecx, edx
+	
+	; movzx eax, [@@number]
+	; xor ecx, ecx
+	
+	; decloop:
+		; xor edx, edx
+		; mov ebx, 10
+		; div ebx
+		
+		; push edx
+		; inc ecx
+		
+	; test eax, eax
+	; jnz decloop
+	
+	; printloop:
+		; pop edx
+		; mov ah, 02h
+		; add dl, '0'
+		; int 21h
+		
+	; dec ecx
+	; test ecx, ecx
+	; jnz printloop
+	
+	; mov dl, 0
+	
+	; ret
+	
+; ENDP printUnsignedInteger
+
 ; Wait for a specific keystroke.
+PROC checkForSpecificKeystroke
+	USES eax
+	
+	mov ah, 01h
+	int 16h
+	jz @@return
+
+	mov ah, 00h
+	int 16h
+
+	cmp al, 1B		;27 is ASCII code for 'ESC'
+	jne @@return
+
+	;mov ax, 03h
+	;int 10h
+	call terminateProcess
+	@@return:
+	ret
+
+ENDP checkForSpecificKeystroke
 PROC waitForSpecificKeystroke
 	USES eax
 	press_check3:
@@ -1866,6 +1886,7 @@ PROC terminateProcess
 	call setVideoMode, 03h
 	mov	ax,04C00h
 	int 21h
+	call stopMusic
 	ret
 ENDP terminateProcess
 
@@ -1920,7 +1941,7 @@ proc wait_VBLANK
 	movzx ecx, [@@framecount]
 	
 		@@VBlank_phase1:
-		in al, dx 
+		in al, dx
 		and al, 8
 		jnz @@VBlank_phase1
 		@@VBlank_phase2:
@@ -1940,66 +1961,128 @@ PROC main
     push ds
     pop es
 	
-	call setVideoMode, 13h		; Initialize video mode 13h
 	
-	; Read and display the first page of the GUI
+	call setVideoMode, 13h
+	
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
-	call fillBackground, [Black]
+	call fillBackground, 0
 	call fillRectangle, 0, 0, 320, 200, 1, offset dataread_GUI, 0
+	call startMusic
 	
-	@@update:                      			
-		call resetPowerup		;time checking and powerup reset
+
+	@@update:                      			;time checking loop
+		cmp al, 65h		;27 is ASCII code for 'ESC'
+		je exitGame
+		
+		cmp [timer_active], 0
+		je @@Powerupactive
+		
+		@@checktime:
+			; call GetSystemTime
+			xor edx, edx
+			lea edi, [powerups]
+			@@Poweruploop:
+				cmp [edi + edx + Powerup.Applied], 1
+				jne @@next
+				; mov ebx, 0
+				; div ebx
+				call checkTimer, 1, edx
+				cmp eax, 1
+				je @@Powerupinactive
+				
+				@@next:
+					add edx, [Powerup_Struct_Size]
+					cmp edx, 1392
+					jl @@Poweruploop
+					
+				jmp @@Powerupactive
+			
+			@@Powerupinactive:
+			mov [timer_active], 0
+			lea edi, [level_bricks]
+		
+			call scaleDown, [edi + Brick.Height]
+			mov edx, eax
+			call scaleDown, [edi + Brick.Width]
+			mov ecx, eax
+			call scaleDown, [edi + Brick.y_Pos]
+			mov ebx, eax
+			call scaleDown, [edi + Brick.x_Pos]
+			
+			call drawRectangle, eax, ebx, ecx, edx, 0, 0
+			call scaleUp, 25
+			mov [edi + Brick.Width], eax
+			
+			jmp @@Poweruploop
 			
 		@@Powerupactive:
-			lea edi, [level_bricks]		; Load effective adress of level_bricks into edi
+			lea edi, [level_bricks]
 			call gui
 			
-			cmp [Skip_GUI], 0			; Skip GUI if 1
+			cmp [Skip_GUI], 0
 			je wait_frame
 			
-			call updateBrick, 1, 0		; Update moving bricks
-			call movePowerup			; Move the powerups
-		
-			call drawBall, [Black]		; Remove the ball
-			call moveBall               ; Move the ball
+			call updateBrick, 1, 0
+			call movePowerup
 			
-			call drawPaddle, [Black] 	; Remove the paddle			
-			call movePaddle		        ; Move the paddles (check for pressing of keys)
+			; call setVideoMode, 13h
+			call drawBall, [Black]		;remove the ball
+			call moveBall               ;move the ball
 			
-			cmp [Skip_GUI], 0			; Skip GUI if 1
+			call drawPaddle, [Black] 	;remove the paddle			
+			call movePaddle		        ;move the paddles (check for pressing of keys)
+			
+			cmp [Skip_GUI], 0
 			je wait_frame
 			
-			call drawBall, [White]   	; Draw the ball
-			call drawPaddle, [White]   	; Draw the paddles with the updated positions
+			call drawBall, [White]      ;draw the ball
+			
+			; call setVideoMode, 13h
+			
+			
+			; cmp [Skip_GUI], 0
+			; je wait_frame
+			
+			call drawPaddle, [White]   	;draw the paddles with the updated positions
 		
 		wait_frame:
 		call wait_VBLANK, 1
-		jmp @@update				; After everything update again
+		jmp @@update				;after everything update again
+
+		;call all update functions
 
     call waitForSpecificKeystroke, 001Bh 		; keycode for ESC
-	@@exitGame:
+	exitGame:
 		call terminateProcess
 
 ENDP main
 ; -------------------------------------------------------------------
 DATASEG
-	; Error messages
+	; GUI strings
+	Levels db "Levels      Press A", 10, 10, '$'
+	Endless db "Endless     Press B", 10, 10, '$'
+	Exit db "Exit        Press ESC", '$'
+	
+	; GUI Levels selection
+	LevA db "Level 1      Press A", 10, 10, '$'
+	LevB db "Level 2      Press B", 10, 10, '$'
+	LevC db "Level 3      Press C", '$'
+	
 	openErrorMsg db "could not open file", 13, 10, '$'
 	readErrorMsg db "could not read data", 13, 10, '$'
 	closeErrorMsg db "error during file closing", 13, 10, '$'
 
-	; Game Constatnt
+	;Game Constatnt
+	;Speed_Constant dd 9                        	; Variable used for making game slower if speed is smaller than this then it will be same as speed =0 because the division is rounded to 0
 	Scaling_Factor dd 4
-	Ball_Base_Vx dd 24
-	Ball_Base_Vy dd -16
-	
-	; Colors
+	Exit_Game db 0							; Exiting Boolean
+	Colliding db 0							; Colliding Boolean
+	Skip_GUI db 0
+	; colors
 	Black dd 0
 	White dd 15
 	
-	; Indexes
 	index dd 0
-	Skip_GUI db 0
 	rand_seed  dd ?
 	timer_flag dd 0
 	start_timer dd 0
@@ -2007,11 +2090,6 @@ DATASEG
 	current_time dd 0
 	timer_active dd 0
 	
-	; Booleans
-	Exit_Game db 0							
-	Colliding db 0							
-	
-	; ...
 	d_ratio dd 0
 	d_hor dd 0
 	d_vert dd 0
@@ -2020,38 +2098,36 @@ DATASEG
 	Brick_Struct_Size dd 48
 	Powerup_Struct_Size dd 52
 	
-	; Level size
+	;Level size
 	Level_Size dd 0
 	Powerup_Amount dd 15
 	
-	; Level files
 	level1 db "level1.bin", 0
 	level2 db "level2.bin", 0
 	level3 db "level3.bin", 0
 	ball db "Ball.bin", 0
-	powerups_file db "Powerups.bin", 0
-	
-	; GUI files
 	GUI db "GUI.bin", 0
 	Arrow db "Arrow.bin", 0
 	level_page	db "Levelgui.bin", 0
 	
-	; Powerup files
+	powerups_file db "Powerups.bin", 0
 	smallpad db "smallpad.bin", 0
 	bigpad db "bigpad.bin", 0
+	; morebal db "morebal.bin", 0
 	fastbal db "fastbal.bin", 0
 	slowbal db "slowbal.bin", 0
 	instabr db "instabr.bin", 0
 	
-	; Uninitialized datareads
 	dataread_GUI db DATASIZE_FS dup (?)
 	dataread_Arrow db DATASIZE_Arrow dup (?)
 	dataread_Level db DATASIZE_Bricks dup (?)
 	dataread_Ball db DATASIZE_Ball dup (?)
 	dataread_Powerup db DATASIZE_Powerup dup (?)
 	
-	; Struct arrays
+	; gui_array Sprites 2 dup (<0, 0, 0, 0>)
 	level_bricks Brick 60 dup (<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>)
+	Ball_Base_Vx dd 24
+	Ball_Base_Vy dd -16
 	game_ball Ball 1 dup (<0, 0, 0, 0, 0, 0>)
 	powerups Powerup 15 dup (<0, 0, 10, 160, 160, 1, 1, 1, 1, 0, 0, 0, 0>)
 	
