@@ -544,7 +544,7 @@ PROC moveBall
 	mov ecx, [Brick_Struct_Size]
 	neg ecx
 	
-	@@collisionCheck:
+	@@collisionCheck:											; loop over every brick in array
 		add ecx, [Brick_Struct_Size]							; ecx = 0 is paddle so we need it if we dont decrease the last element is ecx = 1
 		mov ebx, [edi + ecx + Brick.Width]
 		mov edx, [edi + ecx + Brick.Height]
@@ -557,7 +557,7 @@ PROC moveBall
 		imul [Level_Size]
 		cmp ecx, eax
 		jle @@collisionCheck
-		cmp [Colliding], 0
+		cmp [Colliding], 0										; no collision
 		je endMoveBall
 	@@collision:
 	mov [Colliding], 0
@@ -649,16 +649,10 @@ PROC moveBall
 		jmp negVelocityY
 	
 	hitSide:
-		cmp [esi + Ball.x_Vel], 0
-		jl hitRight										; The differentiation is not needed
-		;hitLeft
 		jmp negVelocityX
+	
+	; From here on it intersects with top 
 		
-		hitRight:
-		jmp negVelocityX
-		; From here on it intersects with top 
-		
-	;ret ; useless
 	gradient:
 		call arcsine
 		mov [@@temp], 2
@@ -685,8 +679,6 @@ PROC moveBall
 		mov eax, [@@temp]
 		mov [esi + Ball.x_Vel], eax     			
 		
-		; xor ebx, ebx
-		; div ebx
 		
 	negVelocityY:
 		neg [esi + Ball.y_Vel]   		; Reverse the vertical velocity of the ball
@@ -703,7 +695,7 @@ PROC moveBall
 		call backToMenu
 		
 		ret
-		; call terminateProcess			
+		
 	
 	return:
 		ret
@@ -722,7 +714,6 @@ ENDP moveBall
 PROC gradientdistance
 	LOCAL @@temp:dword
 	mov eax, [esi + Ball.x_Pos]
-	;mov [@@temp], [esi + Ball.x_Pos]
 	add eax, [esi + Ball.Radius]
 	mov [@@temp], eax
 	fild [dword ptr @@temp]						;FPU STACK: X
@@ -737,14 +728,18 @@ PROC gradientdistance
 	mov [@@temp], eax
 	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Brick.width/2|X
 	fadd										;FPU STACK: Brick.x_Pos+Brick.width/2|X 
-												
+													
 	fsub										;FPU STACK: X-Paddle_X - Paddle_width/2
+	
 	
 	mov eax, [edi + Brick.Width] 		
 	mov [@@temp], eax
 	fild [dword ptr @@temp]						;FPU STACK: Paddle_width|X-Paddle_X - Paddle_width/2
 	mov [@@temp], 2
 	fidiv [dword ptr @@temp]					;FPU STACK: Paddle_width/2|X-pad_X - pad_width/2
+	mov [@@temp], 10
+	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Brick.width/2|X
+	fadd
 	fdiv										;FPU STACK: (X-pad_X - pad_width/2) / (pad_width/2)
 	
 	ret
@@ -762,61 +757,38 @@ PROC pow
 		call gradientdistance				; push the argument (y) on fpu stack
         fmul st(0),st(1)           		; FPU STACK: X^(n) (1 < n < N)  Multiply st(0) by X
         loop power
-	
-    ;fistp [dword ptr @@temp]         ; Store and pop last element from stack into the double word at the memory location pointed to by eax
-	;mov eax, [@@temp]
-	ret									;The procedure returns on the stack
+
+	ret									;The procedure returns on the FPU-stack
 ENDP pow	
 
 
 PROC arcsine
 	LOCAL @@temp:dword, @@temp1:dword
 	call gradientdistance 
-	call pow, 3					;FPU STACK: x^3
-	;mov  [@@temp], eax
-	;fild [dword ptr @@temp]				;FPU STACK: x^3
-	
-	
+	call pow, 3							;FPU STACK: x^3
+		
 	mov [@@temp], 6
 	fidiv [dword @@temp]				;FPU STACK: (1/6)*x^3
 	
 	call gradientdistance 
-	call pow, 5					;FPU STACK: x^5|(1/6)*x^3
-	;mov  [@@temp], eax
-	;fild [dword ptr @@temp]				;FPU STACK: x^5|(1/6)*x^3
+	call pow, 5							;FPU STACK: x^5|(1/6)*x^3
 	mov [@@temp], 3
-	;fild [dword ptr @@temp]				;FPU STACK: 3|x^5|(1/6)*x^3
-	fimul [dword ptr @@temp]					;FPU STACK: 3*x^5|(1/6)*x^3
+	fimul [dword ptr @@temp]			;FPU STACK: 3*x^5|(1/6)*x^3
 	mov [@@temp], 40
 	fidiv [dword @@temp]				;FPU STACK: (3/40)x^5|(1/6)*x^3
 	
-	
-	;fild [@@X]							;FPU STACK: x|(3/40)x^5|(1/6)*x^3
-	call gradientdistance 
+	call gradientdistance 				;FPU STACK: x|(3/40)x^5|(1/6)*x^3
 	fadd
 	fadd								;FPU STACK: x + (3/40)x^5 + (1/6)*x^3
-	
-	
-	;mov [@@temp], 100
-	;fild [dword ptr @@temp]				;FPU STACK: 3|x^5|(1/6)*x^3
-	;fimul [dword ptr @@temp]
-	
-	; fistp [dword ptr @@temp]         	; Store and pop last element from stack into the double word at the memory location pointed to by eax
-	; mov eax, [@@temp]
-	; xor ecx, ecx
-	; div ecx
-	
-	ret
+		
+	ret									;The procedure returns on the FPU-stack
 ENDP arcsine
 
 
 PROC collision
 	ARG 	@@X1:dword, @@Y1:dword, @@Size1:dword, @@X2:dword, @@Y2:dword, @@Width2:dword, @@Height2:dword, @@Active:dword 
 	USES eax, ebx, ecx, edx
-	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)
-	;mov [Colliding], 0			Not needed as if ther is no collision it will be put to 0
-
-											
+	; Everytime collision is checked first put colliding to 0 so that we can use the variable to see if there is already collision (see movePaddle)				
 	
 	mov ebx, [@@Width2]
 	mov edx, [@@Height2]
@@ -912,7 +884,7 @@ ENDP ccw
 PROC intersect
 	ARG 	@@X0:dword, @@Y0:dword, @@X1:dword, @@offsetX: dword, @@offsetY: dword
 	USES ebx, ecx, edx
-			; A = index 0 , B = index 1, C = index 2, D = index 3
+	; A = index 0 , B = index 1, C = index 2, D = index 3
 	
 	; This function uses the the (anti-)clockwise method to determine if there is intersection 
 	; Y0 is used here for point B but as it is for block it will be the same as for point A (remember we only check for intersect with horizontal lines) 
@@ -923,10 +895,10 @@ PROC intersect
 	mov eax, 2
 	imul ebx, eax																
 	mov eax, [esi + Ball.x_Pos]
-	sub eax, ebx																; Position of the ball at time - 2
+	sub eax, ebx														; Position of the ball at time - 2
 	
 	mov ebx, [@@offsetX]
-	imul ebx, [esi + Ball.Radius]												; offset to put te line trough the wanted point of the ball (corner- or middlepoint)
+	imul ebx, [esi + Ball.Radius]										; offset to put te line trough the wanted point of the ball (corner- or middlepoint)
 	
 	add eax, ebx
 	
@@ -938,11 +910,11 @@ PROC intersect
 	mov ecx, [@@offsetY]
 	imul ecx, [esi + Ball.Radius]
 	
-	add ebx, ecx																; Ball position at time + 2 
-																				;we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect)
+	add ebx, ecx														; Ball position at time + 2 
+																		;we do this so that if the line should intersect it intersect fully (sometimes only a small portion of the ball could intersect)
 	push eax
-	push ebx																	; when pushing the value in the stack, it is not erased
-	call ccw, [@@X0], [@@Y0], [@@X1], [@@Y0], eax, ebx							; check clockwise for the block horizontal border (top/bottom) and ball at position t+2 
+	push ebx															; when pushing the value in the stack, it is not erased
+	call ccw, [@@X0], [@@Y0], [@@X1], [@@Y0], eax, ebx					; check clockwise for the block horizontal border (top/bottom) and ball at position t+2 
 	push eax
 	
 	mov ebx, [esi + Ball.x_Vel]
@@ -952,7 +924,7 @@ PROC intersect
 	add ecx, ebx
 	mov ebx, [@@offsetX]
 	imul ebx, [esi + Ball.Radius]
-	add ecx, ebx																; Position of the ball at time + 2
+	add ecx, ebx														; Position of the ball at time + 2
 	
 	mov eax, [esi + Ball.y_Vel]
 	mov ebx, 2
@@ -964,8 +936,8 @@ PROC intersect
 	add edx, ebx
 	
 	call ccw, [@@X0], [@@Y0], [@@X1], [@@Y0], ecx, edx
-	pop ebx 																	; pop eax from the first ccw into ebx
-	cmp eax, ebx																; if they have both the same orientation it does not intersect
+	pop ebx 															; pop eax from the first ccw into ebx
+	cmp eax, ebx														; if they have both the same orientation it does not intersect
 	
 	je noIntersectPop
 	
@@ -988,7 +960,7 @@ PROC intersect
 	ret
 	
 	noIntersectPop:
-	pop eax													; unpopped value(s)
+	pop eax																; unpopped value(s)
 	noIntersect:
 	pop eax
 	mov eax, 0h
@@ -1640,6 +1612,8 @@ PROC initializeLevel
 	
 	call fillBackground, 0
 	call drawBricks
+	
+	mov [edi + Brick.x_Vel], 10
 	
 	ret
 
