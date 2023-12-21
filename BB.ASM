@@ -654,10 +654,10 @@ PROC moveBall
 	; From here on it intersects with top 
 		
 	gradient:
-		call arcsine
-		mov [@@temp], 2
-		fidiv [dword ptr @@temp]					;FPU STACK: 1/2 * arcsin(y)			
-		fcos										; cos(1/2 * arcsin(y))
+		call arcsine								;FPU STACK: arcsin(y)			Image e {-pi/2, pi/2}
+		mov [@@temp], 2								
+		fidiv [dword ptr @@temp]					;FPU STACK: 1/2 * arcsin(y)		Image e {-pi/4, pi/4}
+		fcos										;FPU STACK: cos(1/2 * arcsin(y))
 		mov eax, [Ball_Base_Vy]
 		mov [@@temp], eax
 		fild [dword ptr @@temp]         			; Store and pop last element from stack into the double word at the memory location pointed to by eax
@@ -670,14 +670,14 @@ PROC moveBall
 		call arcsine
 		mov [@@temp], 2
 		fidiv [dword ptr @@temp]					;FPU STACK: 1/2 * arcsin(y)			
-		fsin										; cos(1/2 * arcsin(y))
+		fsin										;FPU STACK: sin(1/2 * arcsin(y))
 		mov eax, [Ball_Base_Vx]
 		mov [@@temp], eax
 		fild [dword ptr @@temp]         			; Store and pop last element from stack into the double word at the memory location pointed to by eax
-		fmul st(0),st(1)           					; FPU STACK: Vy_base * cos(1/2 * arcsin(y))
+		fmul st(0),st(1)           					; FPU STACK: Vx_base * sin(1/2 * arcsin(y))
 		fistp [dword ptr @@temp]	
 		mov eax, [@@temp]
-		mov [esi + Ball.x_Vel], eax     			
+		mov [esi + Ball.x_Vel], eax     				
 		
 		
 	negVelocityY:
@@ -720,14 +720,14 @@ PROC gradientdistance
 	
 	mov eax, [edi + Brick.Width]
 	mov [@@temp], eax
-	fild [dword ptr @@temp]						;FPU STACK: Brick.width|X
+	fild [dword ptr @@temp]						;FPU STACK: Paddle_width|X
 	mov [@@temp], 2
-	fidiv [dword ptr @@temp]					;FPU STACK: Brick.width/2|X
+	fidiv [dword ptr @@temp]					;FPU STACK: Paddle_width/2|X
 	
 	mov eax, [edi + Brick.x_Pos]
 	mov [@@temp], eax
-	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Brick.width/2|X
-	fadd										;FPU STACK: Brick.x_Pos+Brick.width/2|X 
+	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Paddle_width/2|X
+	fadd										;FPU STACK: Brick.x_Pos+Paddle_width/2|X 
 													
 	fsub										;FPU STACK: X-Paddle_X - Paddle_width/2
 	
@@ -737,10 +737,10 @@ PROC gradientdistance
 	fild [dword ptr @@temp]						;FPU STACK: Paddle_width|X-Paddle_X - Paddle_width/2
 	mov [@@temp], 2
 	fidiv [dword ptr @@temp]					;FPU STACK: Paddle_width/2|X-pad_X - pad_width/2
-	mov [@@temp], 10
-	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Brick.width/2|X
-	fadd
-	fdiv										;FPU STACK: (X-pad_X - pad_width/2) / (pad_width/2)
+	mov [@@temp], 20
+	fild [dword ptr @@temp]						;FPU STACK: Brick.x_Pos|Paddle_width/2|X
+	fsub
+	fdiv										;FPU STACK: (X - pad_X - Paddle_width/2) / (Paddle_width/2)
 	
 	ret
 
@@ -761,7 +761,7 @@ PROC pow
 	ret									;The procedure returns on the FPU-stack
 ENDP pow	
 
-
+; Arcsine = x + (3/40)x^5 + (1/6)*x^3
 PROC arcsine
 	LOCAL @@temp:dword, @@temp1:dword
 	call gradientdistance 
@@ -784,6 +784,27 @@ PROC arcsine
 	ret									;The procedure returns on the FPU-stack
 ENDP arcsine
 
+; Arcsine = x - (1/3)*x^3 + (1/5)x^5 - (1/7)x^7
+PROC arctan
+	LOCAL @@temp:dword, @@temp1:dword
+
+	call gradientdistance 
+	call pow, 5							;FPU STACK: x^5
+	mov [@@temp], 5
+	fidiv [dword @@temp]				;FPU STACK: (1/5)x^5
+	
+	call gradientdistance 				;FPU STACK: x|(1/5)x^5
+	fadd
+	
+	call gradientdistance 
+	call pow, 3							;FPU STACK: x^3
+	mov [@@temp], 3
+	fidiv [dword @@temp]				;FPU STACK: (1/6)*x^3
+	
+	fsub								;FPU STACK: x + (1/5)x^5 - (1/3)*x^3
+		
+	ret		
+ENDP arctan
 
 PROC collision
 	ARG 	@@X1:dword, @@Y1:dword, @@Size1:dword, @@X2:dword, @@Y2:dword, @@Width2:dword, @@Height2:dword, @@Active:dword 
@@ -1933,7 +1954,7 @@ PROC main
     pop es
 	
 	call setVideoMode, 13h		; Initialize video mode 13h
-	
+	finit
 	; Read and display the first page of the GUI
 	call ReadFile, offset GUI, offset dataread_GUI, DATASIZE_FS
 	call fillBackground, [Black]
