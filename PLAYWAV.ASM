@@ -4,7 +4,8 @@
 ; TASM
 ;
 ; author:	David Blinder
-; date:		1/10/2020
+; modified by: Kyan David, Artyom Petrosyan
+; date:		12/12/2023
 ; program:	Play WAV music file example
 ; 
 ; Based on the code found in:
