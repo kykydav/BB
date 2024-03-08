@@ -1,4 +1,4 @@
-Title: Brickbreaker Game in x80386 Assembly Language
+*Brickbreaker Game in x80386 Assembly Language*
 
 Introduction:
 In fulfillment of the requirements for our computer systems class, we developed a brickbreaker game using assembly language specifically targeting the x80386 architecture. 
