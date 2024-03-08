@@ -4,6 +4,7 @@ In fulfillment of the requirements for our computer systems class, we developed 
 This report outlines the design, implementation, and features of our brickbreaker game.
 
 **Game Overview:**
+
 The objective of the brickbreaker game is to maneuver a paddle horizontally along the bottom of the screen to bounce a ball upward, 
 breaking bricks arranged in various patterns at the top of the screen.
 
